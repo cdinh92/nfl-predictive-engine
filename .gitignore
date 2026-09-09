@@ -17,6 +17,13 @@ data/
 *.sqlite
 *.db
 
+# Ignore everything in data folder by default...
+data/*
+
+# ...except the prediction ledger and the latest frontend json export
+!data/predictions_latest.json
+!data/prediction_ledger.csv
+
 # Saved ML Models
 models/
 !models/.gitkeep
