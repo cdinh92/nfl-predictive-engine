@@ -2,6 +2,7 @@ import pandas as pd
 import xgboost as xgb
 import os
 from datetime import datetime, timezone
+import json
 
 def get_team_latest_stats(features_df, team):
     """Finds the most recent rolling stats for a specific team."""
@@ -121,6 +122,41 @@ if __name__ == "__main__":
                 edge=edge,
                 pick=pick,
             )
+
+        # Export for Khoa's frontend dashboard
+        json_path = os.path.join(DATA_DIR, "predictions_latest.json")
+        is_high_confidence = abs(edge) >= 0.05
+
+        json_payload = {
+            "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "season": 2026,
+            "week": "Kickoff",
+            "games": [
+                {
+                    "game_id": f"2026_{away_team}_{home_team}",
+                    "home_team": {
+                        "abbr": home_team,
+                        "moneyline": int(vegas_home_ml)
+                    },
+                    "away_team": {
+                        "abbr": away_team
+                    },
+                    "prediction": {
+                        # Explicitly cast to native Python float to avoid float32 JSON errors
+                        "model_home_win_prob": round(float(model_home_win_prob), 3),
+                        "vegas_home_implied_prob": round(float(vegas_implied_prob), 3),
+                        "edge": round(float(edge), 3),
+                        "pick": str(pick),
+                        "confidence_tier": "High" if is_high_confidence else "Standard"
+                    }
+                }
+            ]
+        }
+
+        with open(json_path, 'w') as f:
+            json.dump(json_payload, f, indent=2)
+
+        print(f"✅ Exported single-game JSON to {os.path.abspath(json_path)}")
         
         if edge > 0:
             print(f"✅ The model likes the {home_team} (Home) more than Vegas does.")
