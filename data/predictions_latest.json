@@ -1,0 +1,24 @@
+{
+  "last_updated": "2026-09-09T06:04:06Z",
+  "season": 2026,
+  "week": "Kickoff",
+  "games": [
+    {
+      "game_id": "2026_NE_SEA",
+      "home_team": {
+        "abbr": "SEA",
+        "moneyline": -170
+      },
+      "away_team": {
+        "abbr": "NE"
+      },
+      "prediction": {
+        "model_home_win_prob": 0.323,
+        "vegas_home_implied_prob": 0.63,
+        "edge": -0.306,
+        "pick": "NE",
+        "confidence_tier": "High"
+      }
+    }
+  ]
+}
