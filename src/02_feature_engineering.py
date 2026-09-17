@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import nflreadpy as nfl
 
 def calculate_rolling_features(df):
     print("Calculating time-shifted rolling averages...")
@@ -45,6 +46,74 @@ def calculate_rolling_features(df):
     model_df = model_df.dropna().reset_index(drop=True)
     return model_df
 
+def calculate_advanced_rolling_stats(seasons):
+    """
+    Pulls team-level stats to calculate 4-game rolling passing efficiency 
+    and net yards per play (NY/P).
+    """
+    print(f"Fetching team stats from nflreadpy for seasons: {seasons}...")
+    team_stats = nfl.load_team_stats(seasons).to_pandas()
+    
+    # 1. Feature Creation: Calculate raw game-level metrics
+    team_stats['completion_pct'] = team_stats['completions'] / team_stats['attempts']
+    team_stats['total_yards'] = team_stats['passing_yards'] + team_stats.get('rushing_yards', 0)
+    team_stats['total_plays'] = team_stats['attempts'] + team_stats['sacks_suffered'] + team_stats.get('carries', 0)
+    team_stats['net_yds_per_play'] = team_stats['total_yards'] / team_stats['total_plays']
+
+    team_stats = team_stats.sort_values(by=['team', 'season', 'week'])
+
+    # 2. Rolling Math: 4-Game Averages (using .shift(1) to avoid leakage)
+    features_to_roll = ['passing_yards', 'completion_pct', 'net_yds_per_play']
+    
+    for feature in features_to_roll:
+        roll_col_name = f"roll_{feature}"
+        team_stats[roll_col_name] = team_stats.groupby('team')[feature].transform(
+            lambda x: x.rolling(window=4, min_periods=1).mean().shift(1)
+        )
+        
+    print("✅ Advanced rolling stats engineered.")
+    return team_stats[['game_id', 'team', 'roll_passing_yards', 'roll_completion_pct', 'roll_net_yds_per_play']]
+
+def merge_advanced_features(main_df, advanced_stats_df):
+    """
+    Merges home and away advanced rolling stats into the core feature dataframe.
+    """
+    # Merge for Home Team
+    home_merged = pd.merge(
+        main_df,
+        advanced_stats_df.rename(columns={
+            'team': 'home_team',
+            'roll_passing_yards': 'home_roll_passing_yards',
+            'roll_completion_pct': 'home_roll_completion_pct',
+            'roll_net_yds_per_play': 'home_roll_net_yds_per_play'
+        }),
+        on=['game_id', 'home_team'],
+        how='left'
+    )
+    
+    # Merge for Away Team
+    fully_merged = pd.merge(
+        home_merged,
+        advanced_stats_df.rename(columns={
+            'team': 'away_team',
+            'roll_passing_yards': 'away_roll_passing_yards',
+            'roll_completion_pct': 'away_roll_completion_pct',
+            'roll_net_yds_per_play': 'away_roll_net_yds_per_play'
+        }),
+        on=['game_id', 'away_team'],
+        how='left'
+    )
+    
+    # Fill missing early-season data with 0 to prevent NaN errors in XGBoost
+    advanced_cols = [
+        'home_roll_passing_yards', 'home_roll_completion_pct', 'home_roll_net_yds_per_play',
+        'away_roll_passing_yards', 'away_roll_completion_pct', 'away_roll_net_yds_per_play'
+    ]
+    fully_merged[advanced_cols] = fully_merged[advanced_cols].fillna(0)
+    
+    print("✅ Advanced features successfully merged into model dataset.")
+    return fully_merged
+
 if __name__ == "__main__":
     # Smart Pathing (bulletproof)
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -55,8 +124,13 @@ if __name__ == "__main__":
     input_path = os.path.join(DATA_DIR, "raw_games.csv")
     df = pd.read_csv(input_path)
     
-    # Process features
+    # Process basic point features
     features_df = calculate_rolling_features(df)
+
+    # Process and merge advanced passing/efficiency features
+    unique_seasons = df['season'].unique().tolist()
+    advanced_stats_df = calculate_advanced_rolling_stats(seasons=unique_seasons)
+    final_features_df = merge_advanced_features(features_df, advanced_stats_df)
     
     print("\n--- Engineered Features Preview ---")
     print(features_df[['season', 'week', 'home_team', 'away_team', 'home_roll_pts_scored', 'away_roll_pts_scored']].head())
