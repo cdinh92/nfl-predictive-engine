@@ -15,12 +15,18 @@ def get_team_latest_stats(features_df, team):
     if last_game['home_team'] == team:
         return {
             'roll_pts_scored': last_game['home_roll_pts_scored'],
-            'roll_pts_allowed': last_game['home_roll_pts_allowed']
+            'roll_pts_allowed': last_game['home_roll_pts_allowed'],
+            'roll_passing_yards': last_game['home_roll_passing_yards'],
+            'roll_completion_pct': last_game['home_roll_completion_pct'],
+            'roll_net_yds_per_play': last_game['home_roll_net_yds_per_play']
         }
     else:
         return {
             'roll_pts_scored': last_game['away_roll_pts_scored'],
-            'roll_pts_allowed': last_game['away_roll_pts_allowed']
+            'roll_pts_allowed': last_game['away_roll_pts_allowed'],
+            'roll_passing_yards': last_game['away_roll_passing_yards'],
+            'roll_completion_pct': last_game['away_roll_completion_pct'],
+            'roll_net_yds_per_play': last_game['away_roll_net_yds_per_play']
         }
 
 def american_odds_to_prob(ml):
@@ -67,8 +73,13 @@ if __name__ == "__main__":
     features_df = pd.read_csv(os.path.join(DATA_DIR, "model_features.csv"))
 
     # Train Model on all historical data
-    print("Training XGBoost on historical data...")
-    features = ['home_roll_pts_scored', 'home_roll_pts_allowed', 'away_roll_pts_scored', 'away_roll_pts_allowed']
+    print("Training XGBoost on historical data with advanced efficiency metrics...")
+    features = [
+        'home_roll_pts_scored', 'home_roll_pts_allowed', 
+        'away_roll_pts_scored', 'away_roll_pts_allowed',
+        'home_roll_passing_yards', 'home_roll_completion_pct', 'home_roll_net_yds_per_play',
+        'away_roll_passing_yards', 'away_roll_completion_pct', 'away_roll_net_yds_per_play'
+    ]
     features_df['home_win'] = (features_df['home_score'] > features_df['away_score']).astype(int)
     
     model = xgb.XGBClassifier(n_estimators=100, learning_rate=0.1, random_state=42)
@@ -90,7 +101,13 @@ if __name__ == "__main__":
             'home_roll_pts_scored': home_stats['roll_pts_scored'],
             'home_roll_pts_allowed': home_stats['roll_pts_allowed'],
             'away_roll_pts_scored': away_stats['roll_pts_scored'],
-            'away_roll_pts_allowed': away_stats['roll_pts_allowed']
+            'away_roll_pts_allowed': away_stats['roll_pts_allowed'],
+            'home_roll_passing_yards': home_stats['roll_passing_yards'],
+            'home_roll_completion_pct': home_stats['roll_completion_pct'],
+            'home_roll_net_yds_per_play': home_stats['roll_net_yds_per_play'],
+            'away_roll_passing_yards': away_stats['roll_passing_yards'],
+            'away_roll_completion_pct': away_stats['roll_completion_pct'],
+            'away_roll_net_yds_per_play': away_stats['roll_net_yds_per_play']
         }])
 
         print("\n--- MODEL INPUT FEATURES ---")
@@ -162,6 +179,29 @@ if __name__ == "__main__":
             print(f"✅ The model likes the {home_team} (Home) more than Vegas does.")
         else:
             print(f"✅ The model likes the {away_team} (Away) more than Vegas does.")
+
+        # Trigger visual markdown and chart generation
+        try:
+            import importlib
+            import sys
+            sys.path.append(SCRIPT_DIR)
+            gen_report = importlib.import_module("08_generate_report")
+            gen_report.generate_visual_report(
+                away_team=away_team,
+                home_team=home_team,
+                date_str="2026-09-09",
+                vegas_prob=vegas_implied_prob,
+                model_prob_home=float(model_home_win_prob),
+                edge=float(edge),
+                home_scored=home_stats['roll_pts_scored'],
+                home_allowed=home_stats['roll_pts_allowed'],
+                away_scored=away_stats['roll_pts_scored'],
+                away_allowed=away_stats['roll_pts_allowed'],
+                pick=pick
+            )
+        except Exception as e:
+            print(f"Could not generate visual report: {e}")
+
     else:
         print("Error: Could not find rolling stats for one of the teams.")
 

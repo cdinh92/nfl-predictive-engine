@@ -133,9 +133,9 @@ if __name__ == "__main__":
     final_features_df = merge_advanced_features(features_df, advanced_stats_df)
     
     print("\n--- Engineered Features Preview ---")
-    print(features_df[['season', 'week', 'home_team', 'away_team', 'home_roll_pts_scored', 'away_roll_pts_scored']].head())
+    print(final_features_df[['season', 'week', 'home_team', 'away_team', 'home_roll_pts_scored', 'away_roll_pts_scored', 'home_roll_passing_yards', 'away_roll_passing_yards']].head())
     
     # Save the machine learning ready dataset
     output_path = os.path.join(DATA_DIR, "model_features.csv")
-    features_df.to_csv(output_path, index=False)
-    print(f"\n✅ Saved {len(features_df)} rows of training data to {output_path}")
+    final_features_df.to_csv(output_path, index=False)
+    print(f"\n✅ Saved {len(final_features_df)} rows of training data to {output_path}")
