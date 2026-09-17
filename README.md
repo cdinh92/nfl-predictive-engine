@@ -1,38 +1,32 @@
-# NFL Predictive Engine
+# NFL Predictive Modeling & Betting Engine
 
-An automated machine learning pipeline built with Python and XGBoost to predict American football match outcomes and compare them against live Vegas spreads.
+## 🎯 Purpose of the Repository
+This repository contains an end-to-end data pipeline and machine learning engine designed to predict National Football League (NFL) game outcomes. Using historical team statistics, rolling averages, and Vegas betting lines, the project automates weekly schedule predictions, assigns confidence tiers to matchups based on blended statistical edges, and generates clean visual summaries and structured JSON data payloads for tracking and deployment.
 
-## Architecture Overview
+---
 
-This project is structured as a continuous online learning system. It ingests historical data, engineers performance features, trains a regression model to predict score margins, and evaluates those predictions against live bookmaker odds to find statistical betting edges.
+## 🚀 Key Features
+* **Automated Weekly Schedules:** Pulls fresh schedule data via `nflreadpy`[cite: 1].
+* **Machine Learning & Vegas Blending:** Utilizes an XGBoost classifier trained on rolling team metrics combined with implied Vegas moneyline probabilities[cite: 1, 2].
+* **Margin Estimation:** Calculates projected point margins for picks to indicate win intensity.
+* **Structured Data Output:** Exports weekly slates into neatly organized JSON payloads (`predictions/week X/`)[cite: 1, 2].
+* **Visual Table Generation:** Automatically compiles prediction summaries into color-coded, confidence-tiered PNG matrices using Matplotlib[cite: 2].
 
-## Development Roadmap
+---
 
-### Phase 1: Infrastructure & Data Engineering
-- [ ] Set up the Python virtual environment and core dependencies (`pandas`, `xgboost`, `scikit-learn`, `requests`).
-- [ ] Build the data transformation script to convert wide-format game logs (Home/Away) into long-format team logs.
-- [ ] Generate time-shifted 5-game rolling averages for key metrics (Net Yards Per Play, Turnover Differentials).
+## 📊 Weekly Predictions Preview
 
-### Phase 2: Core Machine Learning
-- [ ] Implement chronological train/test splitting to prevent data leakage.
-- [ ] Train the `XGBRegressor` to predict the continuous point margin (`Home_Points - Away_Points`).
-- [ ] Optimize the model for Apple Silicon (M-series) using `n_jobs=-1` for maximum CPU core utilization.
+Here is a preview of the generated prediction matrix and confidence tiers for the current slate:
 
-### Phase 3: Walk-Forward Validation & Backtesting
-- [ ] Standardize historical bookmaker spreads to calculate the "Vegas Implied Margin".
-- [ ] Build an expanding-window (walk-forward) validation loop to simulate real-world weekly betting.
-- [ ] Develop a threshold optimizer to find the mathematically optimal Minimum Edge (e.g., model disagrees with Vegas by > 2.0 points).
+<p align="center">
+  <img src="./predictions/week%202/nfl_predictions_week_2.png" alt="NFL Week Predictions & Confidence Tiers" width="100%">
+</p>
 
-### Phase 4: Live Production Pipeline
-- [ ] Build the entity resolution dictionary (`TEAM_MAP`) to align local database names with external API names.
-- [ ] Integrate **The Odds API** to fetch live Friday/Saturday point spreads.
-- [ ] Merge live odds with historical rolling averages and execute the final inference script to generate the Sunday Betting Card.
+---
 
-## Local Setup
-
-To run this project locally, ensure you are using a virtual environment:
-
-```bash
-python3 -m venv env
-source env/bin/activate
-pip install -r requirements.txt
+## 🛠️ Project Structure
+* `src/` or root scripts:
+  * `07_predict_weekly_slate.py` — Runs the prediction pipeline and outputs the weekly JSON[cite: 1].
+  * `render-prediction-table.py` — Reads the JSON file and renders the visual PNG table[cite: 2].
+* `data/` — Holds model features and historical training datasets.
+* `predictions/` — Stores JSON data and generated PNG tables organized by week folders[cite: 1, 2].
