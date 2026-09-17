@@ -36,7 +36,8 @@ def fetch_historical_games(seasons):
         'game_id', 'season', 'week', 'gameday', 
         'home_team', 'away_team', 'home_score', 'away_score',
         'home_pass_yds', 'home_pass_cmp', 'home_pass_att',
-        'away_pass_yds', 'away_pass_cmp', 'away_pass_att'
+        'away_pass_yds', 'away_pass_cmp', 'away_pass_att',
+        'home_moneyline', 'away_moneyline',
     ]
     
     df = df[columns_to_keep].dropna()
