@@ -1,6 +1,8 @@
 import pandas as pd
 import xgboost as xgb
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, brier_score_loss
+from sklearn.calibration import CalibratedClassifierCV
+import joblib
 import os
 
 def train_baseline_model(df):
@@ -9,14 +11,14 @@ def train_baseline_model(df):
     # 1. Create the Target Variable: 1 if Home Team wins, 0 otherwise
     df['home_win'] = (df['home_score'] > df['away_score']).astype(int)
     
-    # 2. Define our Features (X)
+    # 2. Define Features (X)
+    # Note: Ensure these match the exact features you intend to predict with
     features = [
         'home_roll_pts_scored', 'home_roll_pts_allowed', 
         'away_roll_pts_scored', 'away_roll_pts_allowed'
     ]
     
     # 3. Chronological Train/Test Split
-    # Train on 2023 and 2024, test on 2025
     train_df = df[df['season'] < 2025]
     test_df = df[df['season'] >= 2025]
     
@@ -26,45 +28,52 @@ def train_baseline_model(df):
     print(f"Training on {len(X_train)} games...")
     print(f"Testing against {len(X_test)} games in the 2025 season...")
     
-    # 4. Initialize and Train the Model
-    model = xgb.XGBClassifier(
-        n_estimators=100,      # Number of decision trees
-        learning_rate=0.1,     # How aggressively it learns
-        random_state=42        # Ensures we get the exact same results every time
+    # 4. Initialize the Base Model
+    base_model = xgb.XGBClassifier(
+        n_estimators=100,      
+        learning_rate=0.1,     
+        random_state=42        
     )
-    model.fit(X_train, y_train)
     
-    # 5. Make Predictions and Evaluate
-    predictions = model.predict(X_test)
+    # 5. Wrap with Isotonic Calibration
+    # 'cv=5' uses cross-validation to fit both the base model and the calibrator
+    print("Calibrating probabilities with Isotonic Regression...")
+    calibrated_model = CalibratedClassifierCV(estimator=base_model, method='isotonic', cv=5)
+    calibrated_model.fit(X_train, y_train)
+    
+    # 6. Make Predictions and Evaluate
+    predictions = calibrated_model.predict(X_test)
+    prob_predictions = calibrated_model.predict_proba(X_test)[:, 1]
+    
     accuracy = accuracy_score(y_test, predictions)
+    brier_score = brier_score_loss(y_test, prob_predictions)
     
     print("\n==================================")
-    print("       BASELINE MODEL RESULTS       ")
+    print("       CALIBRATED MODEL RESULTS     ")
     print("==================================")
-    print(f"Accuracy: {accuracy * 100:.2f}%\n")
+    print(f"Accuracy: {accuracy * 100:.2f}%")
+    print(f"Brier Score (Closer to 0 is better): {brier_score:.4f}\n")
     
-    # 6. See which stats the model thinks are most important
-    importance_df = pd.DataFrame({
-        'Feature': features,
-        'Importance Weight': model.feature_importances_
-    }).sort_values(by='Importance Weight', ascending=False)
-    
-    print("What drove the predictions?")
-    print(importance_df.to_string(index=False))
-    
-    return model
+    return calibrated_model
 
 if __name__ == "__main__":
-    # Smart Pathing 
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "src" else SCRIPT_DIR
     DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+    MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
+    
+    # Ensure the models directory exists
+    os.makedirs(MODEL_DIR, exist_ok=True)
 
-    # Load the engineered features
     input_path = os.path.join(DATA_DIR, "model_features.csv")
     
     if not os.path.exists(input_path):
         print("Error: model_features.csv not found! Run 02_feature_engineering.py first.")
     else:
         df = pd.read_csv(input_path)
-        model = train_baseline_model(df)
+        final_model = train_baseline_model(df)
+        
+        # Save the fully calibrated pipeline
+        model_path = os.path.join(MODEL_DIR, "calibrated_xgb_model.joblib")
+        joblib.dump(final_model, model_path)
+        print(f"✅ Calibrated model serialized and saved to {model_path}")
