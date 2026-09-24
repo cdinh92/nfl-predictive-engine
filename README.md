@@ -100,22 +100,4 @@ When executing predictions on the active week:
 ## 🔮 3. Week 3 Projections Slate
 
 Projections generated with the updated 9-differential XGBoost regression pipeline:
-
-| Matchup | Gametime (MT) | Model Win Prob | Vegas Implied | Edge | Pick (Proj. Margin) | Tier | 
- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | 
-| **Falcons @ Packers** | Thu 5:15 PM | 68.4% | 63.1% | +5.3% | Packers (by 4.8 pts) | 🟡 Moderate | 
-| **Bengals @ Steelers** | Sun 10:00 AM | 52.1% | 50.5% | +1.6% | Bengals (by 0.8 pts) | 🔴 Low | 
-| **Patriots @ Jaguars** | Sun 10:00 AM | 61.5% | 65.0% | \-3.5% | Jaguars (by 3.2 pts) | 🟡 Moderate | 
-| **Titans @ Giants** | Sun 10:00 AM | 48.3% | 42.1% | +6.2% | Titans (by 0.6 pts) | 🔴 Low | 
-| **Seahawks @ Commanders** | Sun 10:00 AM | 57.0% | 53.8% | +3.2% | Seahawks (by 1.9 pts) | 🔴 Low | 
-| **Jets @ Lions** | Sun 10:00 AM | 74.2% | 78.5% | \-4.3% | Lions (by 8.1 pts) | 🟢 High | 
-| **Panthers @ Browns** | Sun 10:00 AM | 44.0% | 51.2% | \-7.2% | Browns (by 2.1 pts) | 🔴 Low | 
-| **Chiefs @ Dolphins** | Sun 10:00 AM | 71.0% | 68.4% | +2.6% | Chiefs (by 6.7 pts) | 🟢 High | 
-| **Chargers @ Bills** | Sun 10:00 AM | 31.5% | 24.0% | +7.5% | Bills (by 6.9 pts) | 🔴 Low | 
-| **Texans @ Colts** | Sun 10:00 AM | 53.5% | 56.0% | \-2.5% | Colts (by 1.2 pts) | 🔴 Low | 
-| **Cardinals @ 49ers** | Sun 1:05 PM | 22.8% | 17.5% | +5.3% | 49ers (by 10.4 pts) | 🔴 Low | 
-| **Vikings @ Buccaneers** | Sun 1:05 PM | 50.4% | 49.0% | +1.4% | Vikings (by 0.2 pts) | 🔴 Low | 
-| **Raiders @ Saints** | Sun 1:25 PM | 45.2% | 52.0% | \-6.8% | Saints (by 2.4 pts) | 🔴 Low | 
-| **Ravens @ Cowboys** | Sun 1:25 PM | 54.8% | 51.0% | +3.8% | Ravens (by 1.5 pts) | 🔴 Low | 
-| **Rams @ Broncos** | Sun 5:20 PM | 62.0% | 59.5% | +2.5% | Rams (by 3.8 pts) | 🟡 Moderate | 
-| **Eagles @ Bears** | Mon 5:15 PM | 66.5% | 61.2% | +5.3% | Eagles (by 5.1 pts) | 🟡 Moderate | 
+![Week 3 Matchup Predictions](predictions/week_3/nfl_predictions_week_3.png)
