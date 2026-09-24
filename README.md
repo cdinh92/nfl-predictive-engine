@@ -55,43 +55,47 @@ nflreadpy Raw Data ──> 02_feature_engineering.py (EMA Differentials)
 
 ### A. Dynamic EMA Feature Engineering (`02_feature_engineering.py`)
 
-Rather than relying on unweighted seasonal aggregates, the model transitions to **Exponential Moving Averages (EMA)** with an active smoothing span of $\text{span} = 4$.
-
+Rather than relying on unweighted seasonal aggregates, the model transitions to **Exponential Moving Averages (EMA)** with an active smoothing span of `span = 4`.
 * **Leakage Prevention:** Every rolling window shifts backward by 1 week (`shift(1)`), ensuring the model never observes current game data during feature synthesis.
-
-* **Mathematical Compression (9 Differentials):** To optimize signal-to-noise ratio, features are condensed into 9 differential metrics including:
-
-  * Expected Points Added: $\text{diff\_off\_epa} = \text{Home EMA Off EPA} - \text{Away EMA Off EPA}$
-
-  * Points & Yards: $\text{diff\_pts\_scored}$, $\text{diff\_pass\_yds}$, $\text{diff\_rush\_yds}$
-
-  * Efficiency: $\text{diff\_comp\_pct}$, $\text{diff\_net\_yds\_play}$, $\text{diff\_off\_cpoe}$
+* **Efficiency Focus:** Incorporates advanced efficiency metrics from `nflreadpy`, including:
+  * Expected Points Added (`off_epa`, `def_epa`)
+  * Completion Percentage Over Expected (`off_cpoe`)
+  * Net yards per play (`net_yds_per_play`)
+* **Mathematical Compression (9 Differentials):** To optimize signal-to-noise ratio, features are condensed into 9 differential metrics:
+  1. `diff_pts_scored` = Home EMA Pts Scored - Away EMA Pts Scored
+  2. `diff_pts_allowed` = Away EMA Pts Allowed - Home EMA Pts Allowed
+  3. `diff_pass_yds` = Home EMA Pass Yds - Away EMA Pass Yds
+  4. `diff_rush_yds` = Home EMA Rush Yds - Away EMA Rush Yds
+  5. `diff_comp_pct` = Home EMA Comp % - Away EMA Comp %
+  6. `diff_net_yds_play` = Home EMA Net Yds/Play - Away EMA Net Yds/Play
+  7. `diff_off_epa` = Home EMA Off EPA - Away EMA Off EPA
+  8. `diff_def_epa` = Away EMA Def EPA - Home EMA Def EPA
+  9. `diff_off_cpoe` = Home EMA CPOE - Away EMA CPOE
 
 ### B. Point Margin Regression Target (`03_model_training.py`)
 
-Rather than treating game prediction as a noisy binary classification task, the engine trains an **XGBoost Regressor** (`xgb.XGBRegressor`) on the actual score margin:
+Rather than treating game prediction as a noisy binary classification task (0 or 1), the engine trains an **XGBoost Regressor** (`xgb.XGBRegressor`) on the actual score margin:
+`home_margin = home_score - away_score`
 
-$$
-\text{home\_margin} = \text{home\_score} - \text{away\_score}
-$$
-
-* **Margin-to-Probability Transformation:** Predictions output a point margin. This is converted to win probability using the cumulative standard normal distribution ($\Phi$), parameterized by the NFL's historical standard deviation of scoring margins ($\sigma \approx 13.5$):
-  
-
-  $$
-  P(\text{Home Win}) = \Phi\left(\frac{\widehat{\text{margin}}}{13.5}\right)
-  $$
+* **Hyperparameter Regularization:**
+  * `learning_rate`: 0.01 (slowed from 0.05 to prevent overfitting early trends)
+  * `n_estimators`: 250
+  * `max_depth`: 3 (shallow trees reduce over-reliance on individual blowouts)
+  * `subsample` & `colsample_bytree`: 0.8
+* **Margin-to-Probability Transformation:**
+  Predictions output a point margin rather than a direct probability. The predicted margin is converted to win probability using the cumulative standard normal distribution ($\Phi$), parameterized by the NFL's historical standard deviation of scoring margins ($\sigma \approx 13.5$):
+  $$P(\text{Home Win}) = \Phi\left(\frac{\widehat{\text{margin}}}{13.5}\right)$$
 
 ### C. Slate Inference & Ensemble Architecture (`07_predict_weekly_slate.py`)
+When executing predictions on the active week:
+1. **Bookmaker Vig Removal:** Raw moneyline odds are stripped of the house edge to identify true market implied probability:
+   $$P_{\text{raw}} = \begin{cases} \frac{-ML}{-ML + 100}, & ML < 0 \\ \frac{100}{ML + 100}, & ML > 0 \end{cases}$$
+   $$P_{\text{vegas}} = \frac{P_{\text{raw, home}}}{P_{\text{raw, home}} + P_{\text{raw, away}}}$$
+2. **80/20 Ensemble Weighting:**
+   Predictions blend purely data-driven fundamentals with betting market consensus:
+   $$\text{Model Win Prob} = 0.80 \times P(\text{Home Win}) + 0.20 \times P_{\text{vegas}}$$
 
-1. **Bookmaker Vig Removal:** Raw moneyline odds are stripped of the house edge to identify true market implied probability.
-
-2. **80/20 Ensemble Weighting:** Predictions blend purely data-driven fundamentals with betting market consensus:
-   
-
-   $$
-   \text{Model Win Prob} = 0.80 \times P(\text{Home Win}) + 0.20 \times P_{\text{vegas}}
-   $$
+---
 
 ## 🔮 3. Week 3 Projections Slate
 
