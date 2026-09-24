@@ -1,6 +1,7 @@
 import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
+from sklearn.metrics import mean_absolute_error
 import os
 
 # --- 1. Load the Data ---
@@ -11,44 +12,52 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 print("Loading historical data for tuning...")
 features_df = pd.read_csv(os.path.join(DATA_DIR, "model_features.csv"))
 
-# Ensure data is strictly chronological for TimeSeriesSplit
+# Ensure data is strictly chronological
 features_df = features_df.sort_values(by=['season', 'week']).reset_index(drop=True)
 
-# Define features and target
+# 1. Target Variable: Point Margin (Home Score - Away Score)
+features_df['home_margin'] = features_df['home_score'] - features_df['away_score']
+
+# 2. Use the 9 core differential features (matching your current model)
 features = [
-    'home_roll_pts_scored', 'home_roll_pts_allowed', 'away_roll_pts_scored', 'away_roll_pts_allowed',
-    'home_roll_passing_yards', 'home_roll_completion_pct', 'home_roll_net_yds_per_play',
-    'away_roll_passing_yards', 'away_roll_completion_pct', 'away_roll_net_yds_per_play'
+    'diff_pts_scored', 'diff_pts_allowed',
+    'diff_pass_yds', 'diff_rush_yds',
+    'diff_comp_pct', 'diff_net_yds_play',
+    'diff_off_epa', 'diff_def_epa', 'diff_off_cpoe'
 ]
-X = features_df[features]
-y = (features_df['home_score'] > features_df['away_score']).astype(int)
+
+# Filter down to rows with complete feature data up to the test boundary
+tuning_df = features_df.dropna(subset=features + ['home_margin']).copy()
+X = tuning_df[features]
+y = tuning_df['home_margin']
 
 # --- 2. Configure the Tuning Grid ---
-# These are the hyperparameters the system will test
 param_grid = {
-    'max_depth': [3, 4, 5],                  # How deep the trees go
-    'learning_rate': [0.01, 0.05, 0.1],      # How fast the model learns
-    'n_estimators': [100, 200, 300],         # Number of trees
-    'subsample': [0.8, 1.0]                  # Percentage of data used per tree (prevents overfitting)
+    'max_depth': [3, 4, 5],                  # Tree depth to prevent overfitting
+    'learning_rate': [0.01, 0.05, 0.1],      # Step size shrinkage
+    'n_estimators': [100, 150, 250],         # Number of trees
+    'subsample': [0.8, 1.0],                 # Row sampling per tree
+    'colsample_bytree': [0.8, 1.0]           # Feature sampling per tree
 }
 
 # --- 3. Set Up Time-Series Cross-Validation ---
-# n_splits=5 means it will test the model across 5 different points in time
+# Prevents data leakage by ensuring training sets always precede validation sets chronologically
 tscv = TimeSeriesSplit(n_splits=5)
 
-model = xgb.XGBClassifier(random_state=42)
+# Use XGBRegressor to optimize for point margins using Negative Mean Absolute Error
+model = xgb.XGBRegressor(random_state=42)
 
 grid_search = GridSearchCV(
     estimator=model,
     param_grid=param_grid,
-    cv=tscv,               # Use TimeSeriesSplit instead of random K-Fold
-    scoring='accuracy',    # We want to optimize for pure prediction accuracy
-    verbose=1,             # Print progress to the terminal
-    n_jobs=-1              # Use all available CPU cores to speed up training
+    cv=tscv,               
+    scoring='neg_mean_absolute_error',    # Optimize for margin accuracy (MAE)
+    verbose=1,             
+    n_jobs=-1              
 )
 
 # --- 4. Run the Grid Search ---
-print("\nStarting Hyperparameter Tuning. This may take a few minutes...")
+print("\nStarting Hyperparameter Tuning for XGBRegressor... This may take a few moments...")
 grid_search.fit(X, y)
 
 # --- 5. Output the Results ---
@@ -57,6 +66,6 @@ print("-" * 30)
 print(f"Best Hyperparameters Found:")
 for param, value in grid_search.best_params_.items():
     print(f"  {param}: {value}")
-print(f"Best Cross-Validation Accuracy: {grid_search.best_score_ * 100:.2f}%")
+print(f"Best Cross-Validation MAE: {-grid_search.best_score_:.2f} points")
 print("-" * 30)
-print("Update your prediction scripts to use these new parameters inside xgb.XGBClassifier()!")
+print("Update your model initialization in 03_model_training.py to use these best parameters!")

@@ -1,6 +1,7 @@
 from datetime import datetime
 import json
 import os
+import re
 import matplotlib.pyplot as plt
 
 # --- PATH CONFIGURATION ---
@@ -12,23 +13,42 @@ PROJECT_ROOT = (
 )
 PREDICTIONS_BASE = os.path.join(PROJECT_ROOT, 'predictions')
 
-# Target configuration for week and file lookups
-target_week = 2
-WEEK_FOLDER_NAME = f'week {target_week}'
+# --- DYNAMIC TARGET CONFIGURATION ---
+target_week = 2 # Default fallback
+predictor_path = os.path.join(SCRIPT_DIR, '07_predict_weekly_slate.py')
 
-# Point directly to predictions/week 2/ to read JSON and save PNG
+if os.path.exists(predictor_path):
+    with open(predictor_path, 'r') as f:
+        content = f.read()
+        # Regex to find TARGET_WEEK = (any number)
+        match = re.search(r'TARGET_WEEK\s*=\s*(\d+)', content)
+        if match:
+            target_week = int(match.group(1))
+            print(f"✅ Automatically synced target week to {target_week} from 07_predict_weekly_slate.py")
+else:
+    print(f"⚠️ Warning: Could not find {predictor_path} to sync week. Defaulting to {target_week}.")
+
+WEEK_FOLDER_NAME = f'week_{target_week}'
+
+# Point directly to predictions/week_X/ to read JSON and save PNG
 PREDICTIONS_DIR = os.path.join(PREDICTIONS_BASE, WEEK_FOLDER_NAME)
+
+# Fallback in case the older folder naming convention ('week X') is used
+if not os.path.exists(PREDICTIONS_DIR):
+    alt_dir = os.path.join(PREDICTIONS_BASE, f'week {target_week}')
+    if os.path.exists(alt_dir):
+        PREDICTIONS_DIR = alt_dir
+
 os.makedirs(PREDICTIONS_DIR, exist_ok=True)
 
 JSON_FILENAME = f'predictions_2026_week_{target_week}.json'
-# Fixed path: now correctly looks inside predictions/week 2/
 json_path = os.path.join(PREDICTIONS_DIR, JSON_FILENAME)
 
 if not os.path.exists(json_path):
-  print(f'Error: Could not find prediction file at {json_path}')
+  print(f'❌ Error: Could not find prediction file at {json_path}')
   exit()
 
-# Load JSON data[cite: 2]
+# Load JSON data
 with open(json_path, 'r') as f:
   data = json.load(f)
 
@@ -77,7 +97,7 @@ for gameday, games in games_by_date.items():
     else:
       low_tier.append(row_item)
 
-# Define tier titles, contents, and styling colors[cite: 2]
+# Define tier titles, contents, and styling colors
 tiers_data = [
     ('HIGH CONFIDENCE', high_tier, '#d4edda', '#155724'),
     ('MODERATE CONFIDENCE', mod_tier, '#fff3cd', '#856404'),
@@ -105,7 +125,7 @@ for tier_title, matches, bg_color, text_color in tiers_data:
 
 table = ax.table(
     cellText=table_data,
-    colLabels=['Matchup', 'Date & Time', 'Model Blend', 'Vegas', 'Edge', 'Pick'],
+    colLabels=['Matchup', 'Date & Time', 'Model', 'Vegas', 'Edge', 'Pick'],
     cellLoc='center',
     loc='center',
 )
@@ -114,19 +134,19 @@ table.auto_set_font_size(False)
 table.set_fontsize(10)
 table.scale(1, 1.3)
 
-# Strict and balanced column widths to keep layout completely stable[cite: 2]
+# Strict and balanced column widths to keep layout completely stable
 col_widths = [0.24, 0.26, 0.12, 0.12, 0.11, 0.15]
 for i, col in enumerate(col_widths):
   for row in range(len(table_data) + 1):
     table[(row, i)].set_width(col)
 
-# Style main column headers[cite: 2]
+# Style main column headers
 for j in range(6):
   header_cell = table[(0, j)]
   header_cell.set_facecolor('#343a40')
   header_cell.set_text_props(weight='bold', color='#ffffff', size=11)
 
-# Style rows and tier headers cleanly[cite: 2]
+# Style rows and tier headers cleanly
 for idx, (row_type, bg_color, color_val) in enumerate(row_styles):
   row_idx = idx + 1
   if row_type == 'header':
@@ -144,7 +164,7 @@ for idx, (row_type, bg_color, color_val) in enumerate(row_styles):
       cell.set_facecolor('#ffffff')
       cell.set_text_props(color='#212529', size=10)
 
-# Lock title firmly in place right above the table header[cite: 2]
+# Lock title firmly in place right above the table header
 ax.set_title(
     f'NFL Week {week_num} Predictions & Confidence Tiers',
     weight='bold',
@@ -157,4 +177,4 @@ output_image_name = f'nfl_predictions_week_{week_num}.png'
 output_image_path = os.path.join(PREDICTIONS_DIR, output_image_name)
 plt.savefig(output_image_path, dpi=300, bbox_inches='tight', pad_inches=0.15)
 
-print(f'Successfully generated and saved table image to: {os.path.abspath(output_image_path)}')
+print(f'✅ Successfully generated and saved table image to: {os.path.abspath(output_image_path)}')
