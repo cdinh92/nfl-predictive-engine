@@ -143,8 +143,17 @@ def merge_advanced_features(main_df, advanced_stats_df):
     fully_merged['diff_def_epa'] = fully_merged['away_roll_def_epa'] - fully_merged['home_roll_def_epa']
     fully_merged['diff_off_cpoe'] = fully_merged['home_roll_off_cpoe'] - fully_merged['away_roll_off_cpoe']
 
+    # Keep only the essential columns for training and evaluation
+    
+    keep_cols = [
+        'game_id', 'season', 'week', 'gameday', 'home_team', 'away_team', 
+        'home_score', 'away_score', 'home_moneyline', 'away_moneyline',
+        'diff_pts_scored', 'diff_pts_allowed', 'diff_pass_yds', 'diff_rush_yds', 
+        'diff_comp_pct', 'diff_net_yds_play', 'diff_off_epa', 'diff_def_epa', 'diff_off_cpoe'
+    ]
+
     print('✅ All rolling features successfully assembled into EMA differentials.')
-    return fully_merged
+    return fully_merged[keep_cols]
 
 if __name__ == '__main__':
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
