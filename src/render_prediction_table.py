@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import json
 import os
 import re
@@ -60,21 +61,48 @@ high_tier = []
 mod_tier = []
 low_tier = []
 
-for gameday, games in games_by_date.items():
-  clean_date_str = str(gameday).split('T')[0].split(' ')[0]
-  try:
-    parsed_date = datetime.strptime(clean_date_str, '%Y-%m-%d')
-    formatted_date_str = parsed_date.strftime('%b %d')
-  except ValueError:
-    formatted_date_str = clean_date_str
+# Using America/Denver to represent Mountain Time (your timezone when exported)
+local_tz = ZoneInfo("America/Denver")
 
+# --- ALTERNATIVE TIMEZONES (Uncomment the one you need) ---
+# local_tz = ZoneInfo("America/New_York")      # Eastern Time (ET)
+# local_tz = ZoneInfo("America/Chicago")       # Central Time (CT)
+# local_tz = ZoneInfo("America/Los_Angeles")   # Pacific Time (PT)
+# local_tz = ZoneInfo("UTC")                   # Coordinated Universal Time (UTC)
+# local_tz = ZoneInfo("Europe/London")         # British Summer Time / Greenwich Mean Time (BST/GMT)
+# ----------------------------------------------------------
+
+for gameday, games in games_by_date.items():
   for g in games:
     away_full = g['away_team']['name']
     home_full = g['home_team']['name']
     matchup_str = f'{away_full} @ {home_full}'
     
     raw_time = g['gametime']
-    datetime_display = f'{formatted_date_str} • {raw_time}'
+    
+    # Check if raw_time is a valid ISO 8601 UTC string (ends with 'Z')
+    if raw_time and raw_time.endswith('Z'):
+        try:
+            # Parse the UTC time
+            dt_utc = datetime.strptime(raw_time, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+            # Convert to local Mountain Time
+            dt_local = dt_utc.astimezone(local_tz)
+            
+            # Format date and time for display
+            formatted_date_str = dt_local.strftime('%b %d')
+            formatted_time_str = dt_local.strftime('%I:%M %p').lstrip('0')
+            datetime_display = f'{formatted_date_str} • {formatted_time_str}'
+        except ValueError:
+            datetime_display = f'{gameday} • {raw_time}'
+    else:
+        # Fallback if the time isn't in the expected UTC format
+        clean_date_str = str(gameday).split('T')[0].split(' ')[0]
+        try:
+            parsed_date = datetime.strptime(clean_date_str, '%Y-%m-%d')
+            formatted_date_str = parsed_date.strftime('%b %d')
+        except ValueError:
+            formatted_date_str = clean_date_str
+        datetime_display = f'{formatted_date_str} • {raw_time}'
 
     p = g['prediction']
     model_prob = f"{p['model_home_win_prob']*100:.1f}%"
@@ -177,4 +205,4 @@ output_image_name = f'nfl_predictions_week_{week_num}.png'
 output_image_path = os.path.join(PREDICTIONS_DIR, output_image_name)
 plt.savefig(output_image_path, dpi=300, bbox_inches='tight', pad_inches=0.15)
 
-print(f'✅ Successfully generated and saved table image to: {os.path.abspath(output_image_path)}')
+print(f'Successfully generated and saved table image to: {os.path.abspath(output_image_path)}')

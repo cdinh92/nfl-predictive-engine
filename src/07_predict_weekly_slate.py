@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import json
 import os
 import nflreadpy as nfl
@@ -21,6 +22,26 @@ TEAM_NAMES = {
 def get_full_name(abbr):
     return TEAM_NAMES.get(abbr, abbr)
 
+def format_gametime_utc(gameday_val, gametime_str):
+    if not gametime_str or gametime_str == 'TBD' or pd.isna(gametime_str) or pd.isna(gameday_val):
+        return 'TBD'
+    try:
+        # Extract clean YYYY-MM-DD regardless of whether gameday is Timestamp or string
+        date_str = pd.to_datetime(gameday_val).strftime('%Y-%m-%d')
+        time_str = str(gametime_str).strip()[:5]
+        
+        # Parse as Eastern Time
+        dt_str = f"{date_str} {time_str}"
+        et_zone = ZoneInfo("America/New_York")
+        local_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=et_zone)
+        
+        # Convert to ISO UTC
+        return local_dt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    except Exception:
+        return str(gametime_str)
+
+"""
+--- COMMENTED OUT: PREVIOUS MOUNTAIN TIME CONVERTER ---
 def format_gametime(gametime_str):
     if not gametime_str or gametime_str == 'TBD' or pd.isna(gametime_str):
         return 'TBD'
@@ -34,6 +55,7 @@ def format_gametime(gametime_str):
         return dt_temp.strftime('%I:%M %p').lstrip('0')
     except ValueError:
         return str(gametime_str)
+"""
 
 def get_team_latest_stats(df, team):
     team_games = df[(df['home_team'] == team) | (df['away_team'] == team)].copy()
@@ -142,8 +164,9 @@ if __name__ == '__main__':
         away_team_abbr = game['away_team']
         game_id = game['game_id']
 
-        gameday = str(game.get('gameday', 'TBD')).split('T')[0] if pd.notna(game.get('gameday')) else 'TBD'
-        formatted_time = format_gametime(game.get('gametime', 'TBD'))
+        gameday = pd.to_datetime(game['gameday']).strftime('%Y-%m-%d') if pd.notna(game.get('gameday')) else 'TBD'
+        formatted_time = format_gametime_utc(gameday, game.get('gametime', 'TBD'))
+        # formatted_time = format_gametime(game.get('gametime', 'TBD'))
 
         # Fetch Live Odds if available
         home_ml, away_ml = -110, -110 
@@ -239,7 +262,8 @@ if __name__ == '__main__':
             home = g['home_team']['name']
             p = g['prediction']
             pick_display = f"{p['pick_name']} (by {p['projected_margin']} pts)"
-            print(f'  [{g["gametime"]:<10}] {away:>11} @ {home:<11} | Model: {p["model_home_win_prob"]*100:>4.1f}% | Vegas: {p["vegas_home_implied_prob"]*100:>4.1f}% | Edge: {p["edge"]*100:>+5.1f}% | Pick: {pick_display:<25} | Tier: {p["confidence_tier"]:<8}')
+            # print(f'  [{g["gametime"]:<10}] {away:>11} @ {home:<11} | Model: {p["model_home_win_prob"]*100:>4.1f}% | Vegas: {p["vegas_home_implied_prob"]*100:>4.1f}% | Edge: {p["edge"]*100:>+5.1f}% | Pick: {pick_display:<25} | Tier: {p["confidence_tier"]:<8}')
+            print(f'  [{g["gametime"][-9:-1]:<10}] {away:>11} @ {home:<11} | Model: {p["model_home_win_prob"]*100:>4.1f}% | Vegas: {p["vegas_home_implied_prob"]*100:>4.1f}% | Edge: {p["edge"]*100:>+5.1f}% | Pick: {pick_display:<25} | Tier: {p["confidence_tier"]:<8}')
 
     print('\n========================================================================================================_')
 
