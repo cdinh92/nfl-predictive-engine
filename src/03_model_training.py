@@ -52,18 +52,6 @@ def train_regression_model(df):
     y_test_win = test_df['home_win']
     
     print(f"Training on {len(X_train)} games with {len(features)} features...")
-    
-    """
-    # 3. Initialize and train the Regressor
-    model = xgb.XGBRegressor(
-        n_estimators=150,
-        max_depth=4,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42
-    )
-    """
 
     # 3. Initialize and train the Regressor with Optimized Hyperparameters
     model = xgb.XGBRegressor(

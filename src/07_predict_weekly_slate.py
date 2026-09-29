@@ -40,23 +40,6 @@ def format_gametime_utc(gameday_val, gametime_str):
     except Exception:
         return str(gametime_str)
 
-"""
---- COMMENTED OUT: PREVIOUS MOUNTAIN TIME CONVERTER ---
-def format_gametime(gametime_str):
-    if not gametime_str or gametime_str == 'TBD' or pd.isna(gametime_str):
-        return 'TBD'
-    try:
-        parts = str(gametime_str).strip()[:5].split(':')
-        hour = int(parts[0])
-        minute = int(parts[1])
-        # Convert Eastern to Mountain (-2 hours offset)
-        hour_mt = (hour - 2) % 24
-        dt_temp = datetime.strptime(f"{hour_mt:02d}:{minute:02d}", '%H:%M')
-        return dt_temp.strftime('%I:%M %p').lstrip('0')
-    except ValueError:
-        return str(gametime_str)
-"""
-
 def get_team_latest_stats(df, team):
     team_games = df[(df['home_team'] == team) | (df['away_team'] == team)].copy()
     if team_games.empty:
@@ -139,14 +122,6 @@ if __name__ == '__main__':
         print(f"❌ Error: Model not found at {model_path}. Run 03_model_training.py first.")
         exit()
     model = joblib.load(model_path)
-    
-    # 4. Load Live Odds
-    odds_path = os.path.join(DATA_DIR, 'upcoming_odds.csv')
-    if os.path.exists(odds_path):
-        live_odds = pd.read_csv(odds_path)
-    else:
-        print("⚠️ Warning: upcoming_odds.csv not found. Reverting to schedule defaults.")
-        live_odds = pd.DataFrame()
 
     batch_payload = {
         'last_updated': current_time_utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -168,13 +143,13 @@ if __name__ == '__main__':
         formatted_time = format_gametime_utc(gameday, game.get('gametime', 'TBD'))
         # formatted_time = format_gametime(game.get('gametime', 'TBD'))
 
-        # Fetch Live Odds if available
-        home_ml, away_ml = -110, -110 
-        if not live_odds.empty:
-            match_odds = live_odds[(live_odds['home_team'] == home_team_abbr) & (live_odds['away_team'] == away_team_abbr)]
-            if not match_odds.empty:
-                home_ml = match_odds.iloc[0]['home_moneyline']
-                away_ml = match_odds.iloc[0]['away_moneyline']
+        # Fetch dynamic odds from the nflreadpy schedule payload
+        home_ml = game.get('home_moneyline')
+        away_ml = game.get('away_moneyline')
+        
+        # Fallback to -110 only if Vegas hasn't posted the lines yet
+        if pd.isna(home_ml) or pd.isna(away_ml):
+            home_ml, away_ml = -110, -110
 
         # Remove Bookmaker Vig to get true implied probability
         home_raw = american_odds_to_raw_prob(home_ml)
