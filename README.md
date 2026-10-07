@@ -58,3 +58,5 @@ Based on Week 4 performance deviations, the following teams require rating adjus
 * **🛡️ Indianapolis Colts (Defensive Control):** Smothering Washington 30–13 exposed a blind spot in the Low Confidence tier (which erroneously favored Washington with a +23.6% edge).
 * **✅ New York Giants (Efficiency Confirmation):** Validated the model's highest low-tier edge (+25.5%, predicted Giants +9.3) by putting up 36 points and routing Arizona.
 
+![NFL Predictions Week 5](predictions/week_5/nfl_predictions_week_5.png)
+
