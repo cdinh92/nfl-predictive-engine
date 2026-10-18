@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     # Target Configuration
     TARGET_SEASON = 2026
-    TARGET_WEEK = 3
+    TARGET_WEEK = 6
 
     # Folders
     PREDICTIONS_BASE = os.path.join(PROJECT_ROOT, 'predictions')

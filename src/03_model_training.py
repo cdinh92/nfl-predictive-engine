@@ -41,14 +41,16 @@ def train_regression_model(df):
         'diff_off_epa', 'diff_def_epa', 'diff_off_cpoe'
     ]
     
-    train_df = df[df['season'] < 2025].copy()
-    test_df = df[df['season'] >= 2025].copy()
+    clean_df = df.dropna(subset=features).copy()
     
-    train_df = train_df.dropna(subset=features)
-    test_df = test_df.dropna(subset=features)
+    # Train production model on ALL data (2023 through 2026)
+    X_train = clean_df[features]
+    y_train = clean_df['home_margin']
     
-    X_train, y_train = train_df[features], train_df['home_margin']
-    X_test, y_test_margin = test_df[features], test_df['home_margin']
+    # Keep 2026 as the test set purely for the evaluation printout below
+    test_df = clean_df[clean_df['season'] == 2026].copy()
+    X_test = test_df[features]
+    y_test_margin = test_df['home_margin']
     y_test_win = test_df['home_win']
     
     print(f"Training on {len(X_train)} games with {len(features)} features...")

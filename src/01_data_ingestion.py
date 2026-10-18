@@ -100,11 +100,16 @@ def fetch_historical_games(seasons):
     return df
 
 if __name__ == "__main__":
-    target_seasons = [2023, 2024, 2025]
+    target_seasons = [2023, 2024, 2025, 2026]  # Include the 2026 season
     games_df = fetch_historical_games(target_seasons)
     
-    print("\n--- Data Preview ---")
-    print(games_df.head())
+    # NEW: Check how many games were pulled for each season
+    print("\n--- Games per Season ---")
+    print(games_df['season'].value_counts())
+    
+    # UPDATED: Print the tail to see the most recent 2026 games instead of 2023
+    print("\n--- Latest Data Preview ---")
+    print(games_df.tail())
     
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "src" else SCRIPT_DIR
