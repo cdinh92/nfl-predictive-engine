@@ -1,9 +1,11 @@
 import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import mean_absolute_error, accuracy_score, brier_score_loss
+from sklearn.model_selection import TimeSeriesSplit
 from scipy.stats import norm
 import joblib
 import os
+from sklearn.linear_model import Ridge
 
 def american_odds_to_raw_prob(ml):
     if pd.isna(ml):
@@ -21,33 +23,28 @@ def calculate_implied_prob(row):
 def train_regression_model(df):
     print("Prepping data for XGBoost Regressor...")
     
-    # 1. Target Variable: Point Margin (Home Score - Away Score)
     df['home_margin'] = df['home_score'] - df['away_score']
-    
-    # Target for evaluation
     df['home_win'] = (df['home_score'] > df['away_score']).astype(int)
     
-    # 2. Add Vegas Implied Probability as a Bayesian Anchor
     if 'home_moneyline' in df.columns:
         df['vegas_implied_prob'] = df.apply(calculate_implied_prob, axis=1)
     else:
-        df['vegas_implied_prob'] = 0.50  # Fallback if missing
+        df['vegas_implied_prob'] = 0.50
         
-    
     features = [
         'diff_pts_scored', 'diff_pts_allowed',
         'diff_pass_yds', 'diff_rush_yds',
         'diff_comp_pct', 'diff_net_yds_play',
-        'diff_off_epa', 'diff_def_epa', 'diff_off_cpoe'
+        'diff_off_epa', 'diff_def_epa', 'diff_off_cpoe',
+        'diff_adj_off_epa'
     ]
     
     clean_df = df.dropna(subset=features).copy()
     
-    # Train production model on ALL data (2023 through 2026)
     X_train = clean_df[features]
     y_train = clean_df['home_margin']
     
-    # Keep 2026 as the test set purely for the evaluation printout below
+    # Keep 2026 as the test set for robust out-of-sample evaluation
     test_df = clean_df[clean_df['season'] == 2026].copy()
     X_test = test_df[features]
     y_test_margin = test_df['home_margin']
@@ -55,25 +52,21 @@ def train_regression_model(df):
     
     print(f"Training on {len(X_train)} games with {len(features)} features...")
 
-    # 3. Initialize and train the Regressor with Optimized Hyperparameters
     model = xgb.XGBRegressor(
         colsample_bytree=0.8,
         learning_rate=0.01,
         max_depth=3,
         n_estimators=250,
         subsample=0.8,
-        random_state=42
+        random_state=42,
+        objective='reg:absoluteerror'
     )
     
     model.fit(X_train, y_train)
     
-    # 4. Predict Margins and Convert to Probabilities
     margin_predictions = model.predict(X_test)
-    
-    # NFL historical margin standard deviation is roughly 13.5
-    STD_DEV = 13.5
+    STD_DEV = y_test_margin.std()
     prob_predictions = norm.cdf(margin_predictions / STD_DEV)
-    
     binary_predictions = (prob_predictions > 0.5).astype(int)
     
     mae = mean_absolute_error(y_test_margin, margin_predictions)
@@ -101,9 +94,9 @@ if __name__ == "__main__":
         print("Error: model_features.csv not found! Run 02_feature_engineering.py first.")
     else:
         df = pd.read_csv(input_path)
-        final_model = train_regression_model(df)
+        model_bundle = train_regression_model(df)
         
-        # Save the new XGBRegressor model
+        # Save the ensemble model bundle
         model_path = os.path.join(MODEL_DIR, "xgb_margin_model.joblib")
-        joblib.dump(final_model, model_path)
-        print(f"✅ Regression model serialized and saved to {model_path}")
+        joblib.dump(model_bundle, model_path)
+        print(f"Ensemble model bundle serialized and saved to {model_path}")

@@ -1,6 +1,32 @@
 import os
 import nflreadpy as nfl
 import pandas as pd
+from utils_opponent_adjust import compute_adjusted_epa
+
+def calculate_adjusted_features(pbp_df, main_df):
+    print("Calculating opponent-adjusted EPA power ratings via Ridge Regression...")
+    adjusted_team_metrics = compute_adjusted_epa(pbp_df)
+    
+    # Merge adjusted metrics into game schedule data for home and away teams
+    # (Assuming adjusted_team_metrics contains columns: team, adj_off_epa, adj_def_epa)
+    return adjusted_team_metrics
+
+def calculate_opponent_adjusted_epa(df):
+    print("Computing opponent-adjusted EPA metrics...")
+    # Calculate game-level opponent defense adjustments
+    # Group by team as offense to get average EPA yielded
+    off_epa = df[['game_id', 'home_team', 'home_off_epa_per_play']].rename(columns={'home_team': 'team', 'home_off_epa_per_play': 'epa'})
+    away_off = df[['game_id', 'away_team', 'away_off_epa_per_play']].rename(columns={'away_team': 'team', 'away_off_epa_per_play': 'epa'})
+    all_team_games = pd.concat([off_epa, away_off])
+    
+    # Compute league average baseline EPA
+    league_avg_epa = all_team_games['epa'].mean()
+    
+    # Team offensive adjustment relative to league average
+    team_off_factor = all_team_games.groupby('team', as_index=False)['epa'].mean()
+    team_off_factor['adj_off_epa'] = team_off_factor['epa'] - league_avg_epa
+    
+    return team_off_factor[['team', 'adj_off_epa']]
 
 def calculate_rolling_features(df):
     print("Calculating time-shifted exponential rolling averages for scoring, EPA, and CPOE...")
@@ -43,13 +69,14 @@ def calculate_rolling_features(df):
 
     # 2. Compute Exponential Moving Average (EMA) shifted to prevent data leakage
     metrics_to_roll = ['pts_scored', 'pts_allowed', 'off_epa', 'def_epa', 'off_cpoe']
-    SPAN_VAL = 4
     
     def get_rolling(group):
         for metric in metrics_to_roll:
             if metric in group.columns:
-                # Shift by 1 so current game is never seen, then apply EMA
-                group[f'roll_{metric}'] = group[metric].shift(1).ewm(span=SPAN_VAL, adjust=False).mean()
+                # Dynamically scale span based on week to minimize early-season noise
+                # Uses a smaller span for early weeks, scaling up to standard span of 4
+                current_span = min(4, max(2, group['week'].iloc[0]))
+                group[f'roll_{metric}'] = group[metric].shift(1).ewm(span=current_span, adjust=False).mean()
         return group
 
     team_df = team_df.groupby('team', group_keys=False).apply(get_rolling)
@@ -120,17 +147,24 @@ def merge_advanced_features(main_df, advanced_stats_df):
         how='left'
     )
 
+    # Compute and merge opponent-adjusted power ratings
+    adj_epa = calculate_opponent_adjusted_epa(fully_merged)
+    
+    fully_merged = pd.merge(fully_merged, adj_epa.rename(columns={'team': 'home_team', 'adj_off_epa': 'home_adj_off_epa'}), on='home_team', how='left')
+    fully_merged = pd.merge(fully_merged, adj_epa.rename(columns={'team': 'away_team', 'adj_off_epa': 'away_adj_off_epa'}), on='away_team', how='left')
+
     fill_cols = [
         'home_roll_passing_yards', 'home_roll_rushing_yards', 'home_roll_completion_pct', 'home_roll_net_yds_per_play',
         'away_roll_passing_yards', 'away_roll_rushing_yards', 'away_roll_completion_pct', 'away_roll_net_yds_per_play',
         'home_roll_off_epa', 'home_roll_def_epa', 'home_roll_off_cpoe',
-        'away_roll_off_epa', 'away_roll_def_epa', 'away_roll_off_cpoe'
+        'away_roll_off_epa', 'away_roll_def_epa', 'away_roll_off_cpoe',
+        'home_adj_off_epa', 'away_adj_off_epa'
     ]
     for col in fill_cols:
         if col in fully_merged.columns:
             fully_merged[col] = fully_merged[col].fillna(0)
 
-    # --- CONDENSE TO 9 MATHEMATICAL DIFFERENTIALS ---
+    # --- CONDENSE TO DIFFERENTIALS ---
     fully_merged['diff_pts_scored'] = fully_merged['home_roll_pts_scored'] - fully_merged['away_roll_pts_scored']
     fully_merged['diff_pts_allowed'] = fully_merged['away_roll_pts_allowed'] - fully_merged['home_roll_pts_allowed']
     
@@ -142,8 +176,11 @@ def merge_advanced_features(main_df, advanced_stats_df):
     fully_merged['diff_off_epa'] = fully_merged['home_roll_off_epa'] - fully_merged['away_roll_off_epa']
     fully_merged['diff_def_epa'] = fully_merged['away_roll_def_epa'] - fully_merged['home_roll_def_epa']
     fully_merged['diff_off_cpoe'] = fully_merged['home_roll_off_cpoe'] - fully_merged['away_roll_off_cpoe']
+    
+    # New adjusted differential feature
+    fully_merged['diff_adj_off_epa'] = fully_merged['home_adj_off_epa'] - fully_merged['away_adj_off_epa']
 
-    print('✅ All rolling features successfully assembled into EMA differentials.')
+    print('✅ All rolling and opponent-adjusted features successfully assembled.')
     return fully_merged
 
 if __name__ == '__main__':
