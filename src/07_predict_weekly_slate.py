@@ -26,16 +26,13 @@ def format_gametime_utc(gameday_val, gametime_str):
     if not gametime_str or gametime_str == 'TBD' or pd.isna(gametime_str) or pd.isna(gameday_val):
         return 'TBD'
     try:
-        # Extract clean YYYY-MM-DD regardless of whether gameday is Timestamp or string
         date_str = pd.to_datetime(gameday_val).strftime('%Y-%m-%d')
         time_str = str(gametime_str).strip()[:5]
         
-        # Parse as Eastern Time
         dt_str = f"{date_str} {time_str}"
         et_zone = ZoneInfo("America/New_York")
         local_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=et_zone)
         
-        # Convert to ISO UTC
         return local_dt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     except Exception:
         return str(gametime_str)
@@ -69,6 +66,7 @@ def get_team_latest_stats(df, team):
         'roll_off_epa': last_game.get(f'{prefix}roll_off_epa', 0.0),
         'roll_def_epa': last_game.get(f'{prefix}roll_def_epa', 0.0),
         'roll_off_cpoe': last_game.get(f'{prefix}roll_off_cpoe', 0.0),
+        'roll_adj_off_epa': last_game.get(f'{prefix}adj_off_epa', 0.0),
     }
 
 def american_odds_to_raw_prob(ml):
@@ -83,11 +81,9 @@ if __name__ == '__main__':
     DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
     MODEL_DIR = os.path.join(PROJECT_ROOT, 'models')
 
-    # Target Configuration
     TARGET_SEASON = 2026
-    TARGET_WEEK = 7
+    TARGET_WEEK = 6
 
-    # Folders
     PREDICTIONS_BASE = os.path.join(PROJECT_ROOT, 'predictions')
     WEEK_FOLDER_NAME = f'week_{TARGET_WEEK}'
     PREDICTIONS_DIR = os.path.join(PREDICTIONS_BASE, WEEK_FOLDER_NAME)
@@ -100,7 +96,6 @@ if __name__ == '__main__':
     print(f' NFL PREDICTIVE ENGINE | RUN TIMESTAMP: {formatted_timestamp}')
     print(f'=========================================================================================================')
     
-    # 1. Load the Schedule
     print(f'Pulling {TARGET_SEASON} NFL Schedule...')
     schedule = nfl.load_schedules([TARGET_SEASON]).to_pandas()
     target_games = schedule[schedule['week'] == TARGET_WEEK].copy()
@@ -113,15 +108,18 @@ if __name__ == '__main__':
         target_games['gameday'] = pd.to_datetime(target_games['gameday'])
         target_games = target_games.sort_values(by=['gameday', 'gametime'])
 
-    # 2. Load Historical Data for Feature Calculation
     features_df = pd.read_csv(os.path.join(DATA_DIR, 'model_features.csv'))
     
-    # 3. Load the Serialized XGBRegressor Model
-    model_path = os.path.join(MODEL_DIR, 'xgb_margin_model.joblib')
-    if not os.path.exists(model_path):
-        print(f"❌ Error: Model not found at {model_path}. Run 03_model_training.py first.")
+    # Load Models
+    margin_model_path = os.path.join(MODEL_DIR, 'xgb_margin_model.joblib')
+    total_model_path = os.path.join(MODEL_DIR, 'xgb_total_points_model.joblib')
+    
+    if not os.path.exists(margin_model_path) or not os.path.exists(total_model_path):
+        print(f"❌ Error: Required model artifacts missing in {MODEL_DIR}.")
         exit()
-    model = joblib.load(model_path)
+        
+    margin_model = joblib.load(margin_model_path)
+    total_points_model = joblib.load(total_model_path)
 
     batch_payload = {
         'last_updated': current_time_utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -131,7 +129,6 @@ if __name__ == '__main__':
     }
 
     print('---------------------------------------------------------------------------------------------------------')
-
     processed_games_by_date = {}
 
     for _, game in target_games.iterrows():
@@ -141,30 +138,24 @@ if __name__ == '__main__':
 
         gameday = pd.to_datetime(game['gameday']).strftime('%Y-%m-%d') if pd.notna(game.get('gameday')) else 'TBD'
         formatted_time = format_gametime_utc(gameday, game.get('gametime', 'TBD'))
-        # formatted_time = format_gametime(game.get('gametime', 'TBD'))
 
-        # Fetch dynamic odds from the nflreadpy schedule payload
         home_ml = game.get('home_moneyline')
         away_ml = game.get('away_moneyline')
-        
-        # Fallback to -110 only if Vegas hasn't posted the lines yet
         if pd.isna(home_ml) or pd.isna(away_ml):
             home_ml, away_ml = -110, -110
 
-        # Remove Bookmaker Vig to get true implied probability
         home_raw = american_odds_to_raw_prob(home_ml)
         away_raw = american_odds_to_raw_prob(away_ml)
         vegas_implied_prob = home_raw / (home_raw + away_raw) if (home_raw + away_raw) > 0 else 0.50
 
-        # Calculate True Rolling Stats (No Lag)
         home_stats = get_team_latest_stats(features_df, home_team_abbr)
         away_stats = get_team_latest_stats(features_df, away_team_abbr)
 
         if not home_stats or not away_stats:
             continue
 
-        # 1. Provide all 10 features to the model (including opponent-adjusted EPA)
-        matchup_data = pd.DataFrame([{
+        # 1. 10-Feature Matrix for Margin Model
+        margin_matchup_data = pd.DataFrame([{
             'diff_pts_scored': home_stats['roll_pts_scored'] - away_stats['roll_pts_scored'],
             'diff_pts_allowed': away_stats['roll_pts_allowed'] - home_stats['roll_pts_allowed'],
             'diff_pass_yds': home_stats['roll_passing_yards'] - away_stats['roll_passing_yards'],
@@ -172,20 +163,41 @@ if __name__ == '__main__':
             'diff_comp_pct': home_stats['roll_completion_pct'] - away_stats['roll_completion_pct'],
             'diff_net_yds_play': home_stats['roll_net_yds_per_play'] - away_stats['roll_net_yds_per_play'],
             'diff_off_epa': home_stats['roll_off_epa'] - away_stats['roll_off_epa'],
-            'diff_def_epa': away_stats['roll_def_epa'] - home_stats['roll_def_epa'],
+            'diff_def_epa': home_stats['roll_def_epa'] - away_stats['roll_def_epa'],
             'diff_off_cpoe': home_stats['roll_off_cpoe'] - away_stats['roll_off_cpoe'],
-            'diff_adj_off_epa': home_stats.get('roll_adj_off_epa', 0.0) - away_stats.get('roll_adj_off_epa', 0.0)
+            'diff_adj_off_epa': home_stats['roll_adj_off_epa'] - away_stats['roll_adj_off_epa']
         }])
 
-        # 2. Get the pure statistical margin and probability
-        predicted_margin = float(model.predict(matchup_data)[0])
+        # 2. 20-Feature Matrix for Total Points Model
+        total_matchup_data = pd.DataFrame([{
+            'sum_pts_scored': home_stats['roll_pts_scored'] + away_stats['roll_pts_scored'],
+            'sum_pts_allowed': home_stats['roll_pts_allowed'] + away_stats['roll_pts_allowed'],
+            'sum_pass_yds': home_stats['roll_passing_yards'] + away_stats['roll_passing_yards'],
+            'sum_rush_yds': home_stats['roll_rushing_yards'] + away_stats['roll_rushing_yards'],
+            'sum_net_yds_play': home_stats['roll_net_yds_per_play'] + away_stats['roll_net_yds_per_play'],
+            'sum_off_epa': home_stats['roll_off_epa'] + away_stats['roll_off_epa'],
+            'sum_def_epa': home_stats['roll_def_epa'] + away_stats['roll_def_epa'],
+            'diff_pts_scored': home_stats['roll_pts_scored'] - away_stats['roll_pts_scored'],
+            'diff_pts_allowed': away_stats['roll_pts_allowed'] - home_stats['roll_pts_allowed'],
+            'diff_pass_yds': home_stats['roll_passing_yards'] - away_stats['roll_passing_yards'],
+            'diff_rush_yds': home_stats['roll_rushing_yards'] - away_stats['roll_rushing_yards'],
+            'diff_comp_pct': home_stats['roll_completion_pct'] - away_stats['roll_completion_pct'],
+            'diff_net_yds_play': home_stats['roll_net_yds_per_play'] - away_stats['roll_net_yds_per_play'],
+            'diff_off_epa': home_stats['roll_off_epa'] - away_stats['roll_off_epa'],
+            'diff_def_epa': home_stats['roll_def_epa'] - away_stats['roll_def_epa'],
+            'diff_off_cpoe': home_stats['roll_off_cpoe'] - away_stats['roll_off_cpoe'],
+            'diff_adj_off_epa': home_stats['roll_adj_off_epa'] - away_stats['roll_adj_off_epa'],
+            'rest_diff': game.get('rest_diff', 0),
+            'wind_speed': game.get('wind_speed', 0.0),
+            'temperature': game.get('temperature', 70.0)
+        }])
+
+        # Predict using respective models
+        predicted_margin = float(margin_model.predict(margin_matchup_data)[0])
         STD_DEV = 13.5
         stats_home_win_prob = float(norm.cdf(predicted_margin / STD_DEV))
-
-        # 3. Enforce the 80/20 Ensemble Split
         model_home_win_prob = (0.80 * stats_home_win_prob) + (0.20 * vegas_implied_prob)
 
-        # Compute Uncompressed Edge
         edge = model_home_win_prob - vegas_implied_prob
         pick_abbr = home_team_abbr if model_home_win_prob > 0.5 else away_team_abbr
 
@@ -195,8 +207,6 @@ if __name__ == '__main__':
 
         model_winner_prob = model_home_win_prob if model_picks_home else (1.0 - model_home_win_prob)
         vegas_winner_prob = vegas_implied_prob if vegas_picks_home else (1.0 - vegas_implied_prob)
-
-        # The projected margin is no longer a rough estimate, it's the actual model output
         projected_margin = round(abs(predicted_margin), 1)
 
         if same_winner and (model_winner_prob > 0.70) and (vegas_winner_prob > 0.65):
@@ -205,6 +215,9 @@ if __name__ == '__main__':
             confidence_tier = 'Moderate'
         else:
             confidence_tier = 'Low'
+
+        # Total Points Prediction
+        projected_total = float(total_points_model.predict(total_matchup_data)[0])
 
         home_full = get_full_name(home_team_abbr)
         away_full = get_full_name(away_team_abbr)
@@ -222,6 +235,7 @@ if __name__ == '__main__':
                 'pick_abbr': str(pick_abbr),
                 'pick_name': str(pick_full),
                 'projected_margin': projected_margin,
+                'projected_total_points': round(projected_total, 1),
                 'confidence_tier': confidence_tier,
             },
         }
@@ -238,10 +252,9 @@ if __name__ == '__main__':
             home = g['home_team']['name']
             p = g['prediction']
             pick_display = f"{p['pick_name']} (by {p['projected_margin']} pts)"
-            # print(f'  [{g["gametime"]:<10}] {away:>11} @ {home:<11} | Model: {p["model_home_win_prob"]*100:>4.1f}% | Vegas: {p["vegas_home_implied_prob"]*100:>4.1f}% | Edge: {p["edge"]*100:>+5.1f}% | Pick: {pick_display:<25} | Tier: {p["confidence_tier"]:<8}')
-            print(f'  [{g["gametime"][-9:-1]:<10}] {away:>11} @ {home:<11} | Model: {p["model_home_win_prob"]*100:>4.1f}% | Vegas: {p["vegas_home_implied_prob"]*100:>4.1f}% | Edge: {p["edge"]*100:>+5.1f}% | Pick: {pick_display:<25} | Tier: {p["confidence_tier"]:<8}')
+            print(f'  [{g["gametime"][-9:-1]:<10}] {away:>11} @ {home:<11} | Total: {p["projected_total_points"]:<5.1f} | Pick: {pick_display:<25} | Tier: {p["confidence_tier"]:<8}')
 
-    print('\n========================================================================================================_')
+    print('\n=========================================================================================================')
 
     output_filename = f'predictions_{TARGET_SEASON}_week_{TARGET_WEEK}.json'
     json_path = os.path.join(PREDICTIONS_DIR, output_filename)
