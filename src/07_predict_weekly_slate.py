@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     # Target Configuration
     TARGET_SEASON = 2026
-    TARGET_WEEK = 6
+    TARGET_WEEK = 7
 
     # Folders
     PREDICTIONS_BASE = os.path.join(PROJECT_ROOT, 'predictions')
@@ -163,7 +163,7 @@ if __name__ == '__main__':
         if not home_stats or not away_stats:
             continue
 
-        # 1. Provide only the 9 stats to the model
+        # 1. Provide all 10 features to the model (including opponent-adjusted EPA)
         matchup_data = pd.DataFrame([{
             'diff_pts_scored': home_stats['roll_pts_scored'] - away_stats['roll_pts_scored'],
             'diff_pts_allowed': away_stats['roll_pts_allowed'] - home_stats['roll_pts_allowed'],
@@ -173,7 +173,8 @@ if __name__ == '__main__':
             'diff_net_yds_play': home_stats['roll_net_yds_per_play'] - away_stats['roll_net_yds_per_play'],
             'diff_off_epa': home_stats['roll_off_epa'] - away_stats['roll_off_epa'],
             'diff_def_epa': away_stats['roll_def_epa'] - home_stats['roll_def_epa'],
-            'diff_off_cpoe': home_stats['roll_off_cpoe'] - away_stats['roll_off_cpoe']
+            'diff_off_cpoe': home_stats['roll_off_cpoe'] - away_stats['roll_off_cpoe'],
+            'diff_adj_off_epa': home_stats.get('roll_adj_off_epa', 0.0) - away_stats.get('roll_adj_off_epa', 0.0)
         }])
 
         # 2. Get the pure statistical margin and probability
