@@ -21,10 +21,23 @@ To maximize predictive power and push past previous accuracy ceilings, the engin
    - **Win/Loss Accuracy:** Scaled up to a peak baseline performance of **65.59% – 67.10%** on out-of-sample tests.
    - **Brier Score:** Improved down to **0.2239**, demonstrating robust probability calibration.
 
-## 📊 Week 7 Slate Predictions (2026 Season)
-Generated using the fully serialized 10-feature XGBoost model (models/xgb_margin_model.joblib), blending model confidence with Vegas market lines.
+---
 
-![NFL Predictions Week 7](predictions/week_7/nfl_predictions_week_7.png)
+## 📈 Week 7 Evaluation & Performance Recap
+
+Following the completion of Week 7 slate action, the model's out-of-sample predictions were evaluated against actual game outcomes:
+
+- **Total Games Evaluated:** 14
+- **Model Record:** 8–6 
+- **Win Rate:** **57.1%**
+- **Key Takeaways:** The model continued to display strong performance in low-confidence/underdog brackets (going 8–5 in tightly contested matchups), successfully sniffing out key road wins for teams like the Vikings, Lions, Rams, and Cowboys, though mid-range variance on games like Bengals-Ravens provided valuable tuning data for upcoming residual training sets.
+
+---
+
+## 📊 Week 8 Slate Predictions (2026 Season)
+Generated using the fully serialized 10-feature XGBoost model (`models/xgb_margin_model.joblib`), blending model confidence with Vegas market lines for the upcoming Week 8 slate.
+
+![NFL Predictions Week 8](predictions/week_8/nfl_predictions_week_8.png)
 
 ---
 
@@ -47,4 +60,3 @@ python src/07_predict_weekly_slate.py
 
 # 5. Render markdown prediction summary tables
 python src/render_prediction_table.py
-```
