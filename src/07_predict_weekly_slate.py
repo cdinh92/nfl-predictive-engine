@@ -82,7 +82,7 @@ if __name__ == '__main__':
     MODEL_DIR = os.path.join(PROJECT_ROOT, 'models')
 
     TARGET_SEASON = 2026
-    TARGET_WEEK = 8
+    TARGET_WEEK = 9
 
     PREDICTIONS_BASE = os.path.join(PROJECT_ROOT, 'predictions')
     WEEK_FOLDER_NAME = f'week_{TARGET_WEEK}'

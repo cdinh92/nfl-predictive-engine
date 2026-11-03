@@ -23,21 +23,21 @@ To maximize predictive power and push past previous accuracy ceilings, the engin
 
 ---
 
-## 📈 Week 7 Evaluation & Performance Recap
+## 📈 Week 8 Evaluation & Performance Recap
 
-Following the completion of Week 7 slate action, the model's out-of-sample predictions were evaluated against actual game outcomes:
+Following the completion of Week 8 slate action, the model's out-of-sample predictions were evaluated against actual game outcomes:
 
 - **Total Games Evaluated:** 14
-- **Model Record:** 8–6 
-- **Win Rate:** **57.1%**
-- **Key Takeaways:** The model continued to display strong performance in low-confidence/underdog brackets (going 8–5 in tightly contested matchups), successfully sniffing out key road wins for teams like the Vikings, Lions, Rams, and Cowboys, though mid-range variance on games like Bengals-Ravens provided valuable tuning data for upcoming residual training sets.
+- **Model Record:** 10–4 
+- **Win Rate:** **71.4%**
+- **Key Takeaways:** The model delivered a highly accurate 71.4% win rate, driven by dominant performance in the Moderate Confidence tier (5–1) and a perfect outcome on its lone High Confidence pick (Bengals). The engine successfully capitalized on significant market inefficiencies, notably leveraging a massive +19.4% edge to correctly predict the Patriots' underdog victory. The main anomaly was the hometown Broncos pulling off a 28-24 upset over the Chiefs, breaking the algorithm's projection.
 
 ---
 
-## 📊 Week 8 Slate Predictions (2026 Season)
-Generated using the fully serialized 10-feature XGBoost model (`models/xgb_margin_model.joblib`), blending model confidence with Vegas market lines for the upcoming Week 8 slate.
+## 📊 Week 9 Slate Predictions (2026 Season)
+Generated using the fully serialized 10-feature XGBoost model (`models/xgb_margin_model.joblib`), blending model confidence with Vegas market lines for the upcoming Week 9 slate.
 
-![NFL Predictions Week 8](predictions/week_8/nfl_predictions_week_8.png)
+![NFL Predictions Week 9](predictions/week_9/nfl_predictions_week_9.png)
 
 ---
 
@@ -60,3 +60,4 @@ python src/07_predict_weekly_slate.py
 
 # 5. Render markdown prediction summary tables
 python src/render_prediction_table.py
+```
