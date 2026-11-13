@@ -23,21 +23,21 @@ To maximize predictive power and push past previous accuracy ceilings, the engin
 
 ---
 
-## 📈 Week 8 Evaluation & Performance Recap
+## 📈 Week 9 Evaluation & Performance Recap
 
-Following the completion of Week 8 slate action, the model's out-of-sample predictions were evaluated against actual game outcomes:
+Following the completion of Week 9 slate action, the model's out-of-sample predictions were evaluated against actual game outcomes:
 
-- **Total Games Evaluated:** 14
-- **Model Record:** 10–4 
-- **Win Rate:** **71.4%**
-- **Key Takeaways:** The model delivered a highly accurate 71.4% win rate, driven by dominant performance in the Moderate Confidence tier (5–1) and a perfect outcome on its lone High Confidence pick (Bengals). The engine successfully capitalized on significant market inefficiencies, notably leveraging a massive +19.4% edge to correctly predict the Patriots' underdog victory. The main anomaly was the hometown Broncos pulling off a 28-24 upset over the Chiefs, breaking the algorithm's projection.
+- **Total Games Evaluated:** 15
+- **Model Record:** 10–5 
+- **Win Rate:** **66.7%**
+- **Key Takeaways:** The model delivered a robust 66.7% overall win rate, driven by flawless execution in its top tiers. The engine achieved a perfect 100% hit rate across both the High Confidence (2–0) and Moderate Confidence (2–0) matchups. Crucially, the model's confidence stratification worked exactly as designed, successfully isolating all of the week's variance and upsets into the Low Confidence bracket (6–5). 
 
 ---
 
-## 📊 Week 9 Slate Predictions (2026 Season)
-Generated using the fully serialized 10-feature XGBoost model (`models/xgb_margin_model.joblib`), blending model confidence with Vegas market lines for the upcoming Week 9 slate.
+## 📊 Week 10 Slate Predictions (2026 Season)
+Generated using the fully serialized 10-feature XGBoost model (`models/xgb_margin_model.joblib`), blending model confidence with Vegas market lines for the upcoming Week 10 slate.
 
-![NFL Predictions Week 9](predictions/week_9/nfl_predictions_week_9.png)
+![NFL Predictions Week 10](predictions/week_10/nfl_predictions_week_10.png)
 
 ---
 
@@ -60,4 +60,3 @@ python src/07_predict_weekly_slate.py
 
 # 5. Render markdown prediction summary tables
 python src/render_prediction_table.py
-```
