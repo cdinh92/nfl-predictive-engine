@@ -23,21 +23,21 @@ To maximize predictive power and push past previous accuracy ceilings, the engin
 
 ---
 
-## 📈 Week 9 Evaluation & Performance Recap
+## 📈 Week 10 Evaluation & Performance Recap
 
-Following the completion of Week 9 slate action, the model's out-of-sample predictions were evaluated against actual game outcomes:
+Following the completion of Week 10 slate action, the model's out-of-sample predictions were evaluated against actual game outcomes:
 
-- **Total Games Evaluated:** 15
-- **Model Record:** 10–5 
-- **Win Rate:** **66.7%**
-- **Key Takeaways:** The model delivered a robust 66.7% overall win rate, driven by flawless execution in its top tiers. The engine achieved a perfect 100% hit rate across both the High Confidence (2–0) and Moderate Confidence (2–0) matchups. Crucially, the model's confidence stratification worked exactly as designed, successfully isolating all of the week's variance and upsets into the Low Confidence bracket (6–5). 
+- **Total Games Evaluated:** 14
+- **Model Record:** 11–3 
+- **Win Rate:** **78.6%**
+- **Key Takeaways:** The model delivered an exceptional 78.6% overall win rate this week. Interestingly, the confidence tiers performed inversely to expectations: the model was a perfect 6-0 (100%) on its "Low Confidence" picks and strong on "Moderate Confidence" picks (5-2, 71.4%), but missed its single "High Confidence" matchup (0-1). 
 
 ---
 
-## 📊 Week 10 Slate Predictions (2026 Season)
-Generated using the fully serialized 10-feature XGBoost model (`models/xgb_margin_model.joblib`), blending model confidence with Vegas market lines for the upcoming Week 10 slate.
+## 📊 Week 11 Slate Predictions (2026 Season)
+Generated using the fully serialized 10-feature XGBoost model (`models/xgb_margin_model.joblib`), blending model confidence with Vegas market lines for the upcoming Week 11 slate.
 
-![NFL Predictions Week 10](predictions/week_10/nfl_predictions_week_10.png)
+![NFL Predictions Week 11](predictions/week_11/nfl_predictions_week_11.png)
 
 ---
 
