@@ -20,6 +20,19 @@ PROJECT_ROOT = (
 PREDICTIONS_BASE = os.path.join(PROJECT_ROOT, 'predictions')
 ASSETS_DIR = os.path.join(PROJECT_ROOT, 'assets')
 LOGOS_DIR = os.path.join(ASSETS_DIR, 'logos')
+FULL_TEAM_NAMES = {
+    'ARI': 'Arizona Cardinals', 'ATL': 'Atlanta Falcons', 'BAL': 'Baltimore Ravens',
+    'BUF': 'Buffalo Bills', 'CAR': 'Carolina Panthers', 'CHI': 'Chicago Bears',
+    'CIN': 'Cincinnati Bengals', 'CLE': 'Cleveland Browns', 'DAL': 'Dallas Cowboys',
+    'DEN': 'Denver Broncos', 'DET': 'Detroit Lions', 'GB': 'Green Bay Packers',
+    'HOU': 'Houston Texans', 'IND': 'Indianapolis Colts', 'JAX': 'Jacksonville Jaguars',
+    'KC': 'Kansas City Chiefs', 'LAC': 'Los Angeles Chargers', 'LAR': 'Los Angeles Rams',
+    'LA': 'Los Angeles Rams', 'LV': 'Las Vegas Raiders', 'MIA': 'Miami Dolphins',
+    'MIN': 'Minnesota Vikings', 'NE': 'New England Patriots', 'NO': 'New Orleans Saints',
+    'NYG': 'New York Giants', 'NYJ': 'New York Jets', 'PHI': 'Philadelphia Eagles',
+    'PIT': 'Pittsburgh Steelers', 'SEA': 'Seattle Seahawks', 'SF': 'San Francisco 49ers',
+    'TB': 'Tampa Bay Buccaneers', 'TEN': 'Tennessee Titans', 'WAS': 'Washington Commanders',
+}
 os.makedirs(LOGOS_DIR, exist_ok=True)
 
 # --- DYNAMIC TARGET CONFIGURATION ---
@@ -152,8 +165,14 @@ def draw_custom_matchup_card(ax, game_obj: dict, kickoff_label: str):
 
     away_abbr = game_obj['away_team']['abbr']
     home_abbr = game_obj['home_team']['abbr']
+    away_full = FULL_TEAM_NAMES.get(away_abbr, game_obj['away_team'].get('name', away_abbr))
+    home_full = FULL_TEAM_NAMES.get(home_abbr, game_obj['home_team'].get('name', home_abbr))
+
+    # Split "Chicago Bears" -> ("Chicago", "Bears") and "San Francisco 49ers" -> ("San Francisco", "49ers")
+    away_city, away_nick = away_full.rsplit(' ', 1)
+    home_city, home_nick = home_full.rsplit(' ', 1)
+
     p = game_obj['prediction']
-    # Support both new 'market_lines' key and older 'betmgm_lines' key
     mkt = game_obj.get('market_lines') or game_obj.get('betmgm_lines', {})
 
     away_score = p.get('away_projected_score', 0.0)
@@ -167,9 +186,9 @@ def draw_custom_matchup_card(ax, game_obj: dict, kickoff_label: str):
 
     tier = p.get('confidence_tier', 'Low')
     tier_palette = {
-        'High': ('#064E3B', '#34D399'),
-        'Moderate': ('#451A03', '#FBBF24'),
-        'Low': ('#1E293B', '#94A3B8'),
+        'High': ('#0C4A6E', '#38BDF8'),      # Electric Cyan / Sky Blue badge (distinct from emerald picks)
+        'Moderate': ('#451A03', '#FBBF24'),  # Warm Amber Gold badge
+        'Low': ('#1E293B', '#94A3B8'),       # Neutral Slate badge
     }
     t_bg, t_fg = tier_palette.get(tier, ('#1E293B', '#94A3B8'))
     ax.text(
@@ -180,31 +199,35 @@ def draw_custom_matchup_card(ax, game_obj: dict, kickoff_label: str):
     )
 
     # --- SCOREBOARD HERO HEADER ---
-    ax.text(0.50, 0.855, 'PROJECTED SCORE', ha='center', va='center',
-            fontsize=7.8, fontweight='bold', color='#38BDF8', transform=ax.transAxes, zorder=3)
+    ax.text(0.50, 0.862, 'PROJECTED SCORE', ha='center', va='center',
+            fontsize=7.6, fontweight='bold', color='#38BDF8', transform=ax.transAxes, zorder=3)
 
-    # Away Team Block (Left)
-    ax.add_artist(AnnotationBbox(get_team_logo(away_abbr, max_px=74), (0.14, 0.745), frameon=False, xycoords='axes fraction', zorder=4))
-    ax.text(0.24, 0.77, away_abbr, ha='left', va='center',
-            fontsize=13.5, fontweight='bold', color='#F8FAFC', transform=ax.transAxes, zorder=3)
+    # Away Team Block (Left: Logo + City + Nickname + Score)
+    ax.add_artist(AnnotationBbox(get_team_logo(away_abbr, max_px=74), (0.11, 0.745), frameon=False, xycoords='axes fraction', zorder=4))
+    ax.text(0.195, 0.795, away_city.upper(), ha='left', va='center',
+            fontsize=7.4, fontweight='bold', color='#94A3B8', transform=ax.transAxes, zorder=3)
+    ax.text(0.195, 0.742, away_nick, ha='left', va='center',
+            fontsize=12.0, fontweight='bold', color='#F8FAFC', transform=ax.transAxes, zorder=3)
     away_score_color = '#34D399' if away_score > home_score else '#CBD5E1'
-    ax.text(0.24, 0.695, f"{away_score:.1f}", ha='left', va='center',
-            fontsize=15.5, fontweight='bold', color=away_score_color, transform=ax.transAxes, zorder=3)
+    ax.text(0.195, 0.678, f"{away_score:.1f}", ha='left', va='center',
+            fontsize=14.5, fontweight='bold', color=away_score_color, transform=ax.transAxes, zorder=3)
 
     # Center @ Divider
     ax.text(0.50, 0.735, '@', ha='center', va='center',
-            fontsize=12.0, fontweight='bold', color='#475569', transform=ax.transAxes, zorder=3)
+            fontsize=11.5, fontweight='bold', color='#475569', transform=ax.transAxes, zorder=3)
 
-    # Home Team Block (Right)
-    ax.add_artist(AnnotationBbox(get_team_logo(home_abbr, max_px=74), (0.86, 0.745), frameon=False, xycoords='axes fraction', zorder=4))
-    ax.text(0.76, 0.77, home_abbr, ha='right', va='center',
-            fontsize=13.5, fontweight='bold', color='#F8FAFC', transform=ax.transAxes, zorder=3)
+    # Home Team Block (Right: Logo + City + Nickname + Score)
+    ax.add_artist(AnnotationBbox(get_team_logo(home_abbr, max_px=74), (0.89, 0.745), frameon=False, xycoords='axes fraction', zorder=4))
+    ax.text(0.805, 0.795, home_city.upper(), ha='right', va='center',
+            fontsize=7.4, fontweight='bold', color='#94A3B8', transform=ax.transAxes, zorder=3)
+    ax.text(0.805, 0.742, home_nick, ha='right', va='center',
+            fontsize=12.0, fontweight='bold', color='#F8FAFC', transform=ax.transAxes, zorder=3)
     home_score_color = '#34D399' if home_score >= away_score else '#CBD5E1'
-    ax.text(0.76, 0.695, f"{home_score:.1f}", ha='right', va='center',
-            fontsize=15.5, fontweight='bold', color=home_score_color, transform=ax.transAxes, zorder=3)
+    ax.text(0.805, 0.678, f"{home_score:.1f}", ha='right', va='center',
+            fontsize=14.5, fontweight='bold', color=home_score_color, transform=ax.transAxes, zorder=3)
 
-    # --- WIN PROBABILITY SPLIT BAR ---
-    bar_x, bar_y, bar_w, bar_h = 0.045, 0.585, 0.91, 0.026
+    # --- WIN PROBABILITY SPLIT BAR (Full Team Names) ---
+    bar_x, bar_y, bar_w, bar_h = 0.045, 0.580, 0.91, 0.024
     away_w = max(0.08, min(0.92, away_prob)) * bar_w
     home_w = bar_w - away_w
 
@@ -214,12 +237,12 @@ def draw_custom_matchup_card(ax, game_obj: dict, kickoff_label: str):
     ax.add_patch(patches.Rectangle((bar_x, bar_y), away_w, bar_h, facecolor=away_bar_color, edgecolor='none', transform=ax.transAxes, zorder=3))
     ax.add_patch(patches.Rectangle((bar_x + away_w, bar_y), home_w, bar_h, facecolor=home_bar_color, edgecolor='none', transform=ax.transAxes, zorder=3))
 
-    ax.text(bar_x, bar_y + 0.042, f"{away_abbr} {away_prob*100:.1f}%", ha='left', va='center',
-            fontsize=7.8, fontweight='bold', color='#94A3B8', transform=ax.transAxes, zorder=3)
-    ax.text(0.50, bar_y + 0.042, "WIN PROBABILITY", ha='center', va='center',
-            fontsize=7.2, fontweight='bold', color='#64748B', transform=ax.transAxes, zorder=3)
-    ax.text(bar_x + bar_w, bar_y + 0.042, f"{home_prob*100:.1f}% {home_abbr}", ha='right', va='center',
-            fontsize=7.8, fontweight='bold', color='#94A3B8', transform=ax.transAxes, zorder=3)
+    ax.text(bar_x, bar_y + 0.040, f"{away_abbr} {away_prob*100:.1f}%", ha='left', va='center',
+            fontsize=7.6, fontweight='bold', color='#94A3B8', transform=ax.transAxes, zorder=3)
+    ax.text(0.50, bar_y + 0.040, "WIN PROBABILITY", ha='center', va='center',
+            fontsize=7.0, fontweight='bold', color='#64748B', transform=ax.transAxes, zorder=3)
+    ax.text(bar_x + bar_w, bar_y + 0.040, f"{home_prob*100:.1f}% {home_abbr}", ha='right', va='center',
+            fontsize=7.6, fontweight='bold', color='#94A3B8', transform=ax.transAxes, zorder=3)
 
     # --- MARKET MATRIX HEADERS ---
     col_x = [0.125, 0.405, 0.685]
