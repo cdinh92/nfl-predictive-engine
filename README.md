@@ -10,8 +10,6 @@ An end-to-end machine learning pipeline that forecasts NFL game margins, total p
 
 ![Latest NFL Weekly Predictions](predictions/latest_predictions.png)
 
-*(Tip: Keep `predictions/latest_predictions.png` updated each week—see [Auto-Syncing the Hero Image](#-auto-syncing-the-hero-image-on-github) below.)*
-
 ---
 
 ## ⚙️ How the Pipeline Works
