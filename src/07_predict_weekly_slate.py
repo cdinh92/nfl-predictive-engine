@@ -165,7 +165,7 @@ if __name__ == '__main__':
     MODEL_DIR = os.path.join(PROJECT_ROOT, 'models')
 
     TARGET_SEASON = 2026
-    TARGET_WEEK = 11
+    TARGET_WEEK = 12
 
     PREDICTIONS_BASE = os.path.join(PROJECT_ROOT, 'predictions')
     WEEK_FOLDER_NAME = f'week_{TARGET_WEEK}'
@@ -236,6 +236,26 @@ if __name__ == '__main__':
 
         gameday = pd.to_datetime(game['gameday']).strftime('%Y-%m-%d') if pd.notna(game.get('gameday')) else 'TBD'
         formatted_time = format_gametime_utc(gameday, game.get('gametime', 'TBD'))
+
+        skipped_games = 0
+
+    for _, game in target_games.iterrows():
+        home_team_abbr = game['home_team']
+        away_team_abbr = game['away_team']
+        game_id = game['game_id']
+
+        gameday = pd.to_datetime(game['gameday']).strftime('%Y-%m-%d') if pd.notna(game.get('gameday')) else 'TBD'
+        formatted_time = format_gametime_utc(gameday, game.get('gametime', 'TBD'))
+
+        # Skip games that have already kicked off
+        if formatted_time != 'TBD':
+            try:
+                kickoff_utc = datetime.strptime(formatted_time, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+                if kickoff_utc <= current_time_utc:
+                    skipped_games += 1
+                    continue
+            except ValueError:
+                pass
 
         # Lookup BetMGM lines first, fallback to nflreadpy schedule lines
         lookup_home = 'LA' if home_team_abbr == 'LAR' else home_team_abbr
