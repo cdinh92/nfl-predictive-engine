@@ -35,6 +35,12 @@ FULL_TEAM_NAMES = {
 }
 os.makedirs(LOGOS_DIR, exist_ok=True)
 
+
+def get_team_nickname(abbr: str, fallback: str = None) -> str:
+    full = FULL_TEAM_NAMES.get(abbr, fallback or abbr)
+    return full.rsplit(' ', 1)[-1]
+
+
 # --- DYNAMIC TARGET CONFIGURATION ---
 target_week = 11
 predictor_path = os.path.join(SCRIPT_DIR, '07_predict_weekly_slate.py')
@@ -101,35 +107,88 @@ def format_mt_kickoff(gameday: str, raw_time: str, local_tz: ZoneInfo, compact: 
     return f"{gameday} • {raw_time}"
 
 
+def normalize_tier_key(raw_tier: str) -> str:
+    val = str(raw_tier).strip().lower()
+    if val == 'high':
+        return 'HIGH'
+    if val in ('moderate', 'medium'):
+        return 'MEDIUM'
+    return 'LOW'
+
+
 def render_simple_table(all_games: list, week_num: int, scale_factor: float, local_tz: ZoneInfo, output_path: str):
-    """Renders a clean 9-column summary table PNG for casual readers."""
-    num_rows = len(all_games)
-    row_height_in = 0.56
-    header_height_in = 1.35
-    footer_height_in = 0.30
-    fig_width = 14.5
-    fig_height = max(3.6, header_height_in + footer_height_in + num_rows * row_height_in)
+    """Renders a 9-column summary table with team nicknames and tier sections."""
+    tier_order = ['HIGH', 'MEDIUM', 'LOW']
+    tier_meta = {
+        'HIGH': {
+            'title': '● HIGH CONFIDENCE PICKS',
+            'bg': '#331D08',
+            'accent': '#FBBF24',
+            'border': '#D97706',
+            'row_even': '#191926',
+            'row_odd': '#202030',
+        },
+        'MEDIUM': {
+            'title': '● MEDIUM CONFIDENCE PICKS',
+            'bg': '#261844',
+            'accent': '#C084FC',
+            'border': '#9333EA',
+            'row_even': '#16172B',
+            'row_odd': '#1C1D36',
+        },
+        'LOW': {
+            'title': '● LOW CONFIDENCE / TOSS-UP PICKS',
+            'bg': '#0A2E46',
+            'accent': '#38BDF8',
+            'border': '#0284C7',
+            'row_even': '#111B2E',
+            'row_odd': '#152238',
+        },
+    }
+
+    grouped = {'HIGH': [], 'MEDIUM': [], 'LOW': []}
+    for item in all_games:
+        _, g = item
+        t_key = normalize_tier_key(g.get('prediction', {}).get('confidence_tier', 'Low'))
+        grouped[t_key].append(item)
+
+    slots = [('column_header', None)]
+    for t_key in tier_order:
+        if grouped[t_key]:
+            slots.append(('tier_banner', t_key))
+            for game_item in grouped[t_key]:
+                slots.append(('game_row', (t_key, game_item)))
+
+    slot_weights = [
+        0.92 if s_type == 'column_header' else (0.72 if s_type == 'tier_banner' else 1.04)
+        for s_type, _ in slots
+    ]
+    total_weight = sum(slot_weights)
+
+    header_height_in = 1.32
+    footer_height_in = 0.25
+    unit_row_in = 0.60
+    fig_width = 15.2
+    fig_height = max(4.0, header_height_in + footer_height_in + total_weight * unit_row_in)
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=220)
     fig.patch.set_facecolor('#0B0F19')
     ax.set_facecolor('#0B0F19')
     ax.axis('off')
 
-    # Title & Subtitle
     fig.suptitle(
-        f"NFL PREDICTIVE ENGINE  •  WEEK {week_num} QUICK PICKS",
-        fontsize=16.0, fontweight='bold', color='#F8FAFC', y=1.0 - (0.34 / fig_height),
+        f"NFL PREDICTIVE ENGINE  •  WEEK {week_num} QUICK PICKS BY TIER",
+        fontsize=16.5, fontweight='bold', color='#F8FAFC', y=1.0 - (0.34 / fig_height),
     )
     fig.text(
         0.50, 1.0 - (0.68 / fig_height),
-        f"Model Summary (Variance Scale: {scale_factor:.2f}x)  •  All Kickoffs Mountain Time (MT)",
-        ha='center', va='center', fontsize=9.8, color='#94A3B8',
+        f"Model Summary (Variance Scale: {scale_factor:.2f}x)  •  Grouped by Confidence Tier  •  Mountain Time (MT)",
+        ha='center', va='center', fontsize=10.0, color='#94A3B8',
     )
 
-    # Coordinate layout inside axes
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    plt.subplots_adjust(left=0.015, right=0.985, top=1.0 - (0.95 / fig_height), bottom=0.02)
+    plt.subplots_adjust(left=0.014, right=0.986, top=1.0 - (0.95 / fig_height), bottom=0.02)
 
     headers = [
         'Match up',
@@ -142,17 +201,13 @@ def render_simple_table(all_games: list, week_num: int, scale_factor: float, loc
         'Away Score',
         'Total',
     ]
-    col_widths = [0.165, 0.145, 0.105, 0.095, 0.130, 0.085, 0.095, 0.095, 0.085]
+    col_widths = [0.215, 0.130, 0.095, 0.085, 0.130, 0.080, 0.090, 0.090, 0.085]
     col_starts = []
     acc = 0.0
     for w in col_widths:
         col_starts.append(acc)
         acc += w
 
-    total_slots = num_rows + 1  # +1 for table header row
-    slot_h = 1.0 / total_slots
-
-    # Outer table frame
     outer_box = patches.FancyBboxPatch(
         (0.0, 0.0), 1.0, 1.0,
         boxstyle='round,pad=0.0,rounding_size=0.012',
@@ -163,104 +218,146 @@ def render_simple_table(all_games: list, week_num: int, scale_factor: float, loc
     )
     ax.add_patch(outer_box)
 
-    # Table Header Bar
-    hdr_y = 1.0 - slot_h
-    hdr_bg = patches.Rectangle((0.0, hdr_y), 1.0, slot_h, facecolor='#1E293B', edgecolor='none', zorder=2)
-    ax.add_patch(hdr_bg)
-    ax.plot([0, 1], [hdr_y, hdr_y], color='#334155', linewidth=1.2, zorder=3)
+    cursor_y = 1.0
+    tier_row_counter = 0
 
-    for cx, cw, label in zip(col_starts, col_widths, headers):
-        ax.text(
-            cx + cw / 2, hdr_y + slot_h / 2, label.upper(),
-            ha='center', va='center',
-            fontsize=8.6, fontweight='bold', color='#94A3B8', zorder=4,
-        )
-
-    # Data Rows
-    for row_idx, (_, g) in enumerate(all_games):
-        row_y = hdr_y - (row_idx + 1) * slot_h
+    for idx, ((s_type, payload), weight) in enumerate(zip(slots, slot_weights)):
+        slot_h = weight / total_weight
+        row_y = cursor_y - slot_h
         row_mid_y = row_y + slot_h / 2
+        cursor_y = row_y
 
-        if row_idx % 2 == 1:
-            stripe = patches.Rectangle((0.0, row_y), 1.0, slot_h, facecolor='#161F31', edgecolor='none', zorder=2)
-            ax.add_patch(stripe)
+        if s_type == 'column_header':
+            hdr_bg = patches.Rectangle((0.0, row_y), 1.0, slot_h, facecolor='#1E293B', edgecolor='none', zorder=2)
+            ax.add_patch(hdr_bg)
+            ax.plot([0, 1], [row_y, row_y], color='#334155', linewidth=1.2, zorder=3)
 
-        if row_idx < num_rows - 1:
-            ax.plot([0.008, 0.992], [row_y, row_y], color='#1F2A3E', linewidth=0.8, zorder=3)
+            for cx, cw, label in zip(col_starts, col_widths, headers):
+                ax.text(
+                    cx + cw / 2, row_mid_y, label.upper(),
+                    ha='center', va='center',
+                    fontsize=8.6, fontweight='bold', color='#94A3B8', zorder=4,
+                )
 
-        away_abbr = g['away_team']['abbr']
-        home_abbr = g['home_team']['abbr']
-        p = g['prediction']
+        elif s_type == 'tier_banner':
+            tier_row_counter = 0
+            meta = tier_meta[payload]
+            count = len(grouped[payload])
+            game_word = 'GAME' if count == 1 else 'GAMES'
 
-        home_prob = float(p.get('model_home_win_prob', 0.5))
-        vegas_home_prob = float(p.get('vegas_home_implied_prob', 0.5))
-        pick_abbr = p.get('pick_abbr', home_abbr if home_prob >= 0.5 else away_abbr)
-        pick_name = p.get('pick_name', pick_abbr)
+            banner_bg = patches.Rectangle((0.0, row_y), 1.0, slot_h, facecolor=meta['bg'], edgecolor='none', zorder=2)
+            ax.add_patch(banner_bg)
+            accent_bar = patches.Rectangle((0.0, row_y), 0.006, slot_h, facecolor=meta['accent'], edgecolor='none', zorder=3)
+            ax.add_patch(accent_bar)
+            ax.plot([0, 1], [row_y + slot_h, row_y + slot_h], color=meta['border'], linewidth=1.1, zorder=3)
+            ax.plot([0, 1], [row_y, row_y], color=meta['border'], linewidth=1.0, zorder=3)
 
-        # Express probabilities from the picked winner's perspective
-        pick_is_home = (pick_abbr == home_abbr)
-        blend_pick_pct = (home_prob if pick_is_home else (1.0 - home_prob)) * 100.0
-        vegas_pick_pct = (vegas_home_prob if pick_is_home else (1.0 - vegas_home_prob)) * 100.0
+            ax.text(
+                0.016, row_mid_y, meta['title'],
+                ha='left', va='center',
+                fontsize=9.0, fontweight='bold', color=meta['accent'], zorder=4,
+            )
+            ax.text(
+                0.984, row_mid_y, f"{count} {game_word}",
+                ha='right', va='center',
+                fontsize=8.2, fontweight='bold', color=meta['accent'], alpha=0.90, zorder=4,
+            )
 
-        projected_margin = float(p.get('projected_margin', abs(p.get('calibrated_home_margin', 0.0))))
-        home_score = float(p.get('home_projected_score', 0.0))
-        away_score = float(p.get('away_projected_score', 0.0))
-        total_pts = float(p.get('projected_total_points', home_score + away_score))
+        elif s_type == 'game_row':
+            tier_key, (_, g) = payload
+            meta = tier_meta[tier_key]
 
-        # Raw ISO timestamp lookup for compact "Nov 08 • 11:00 AM" display
-        raw_iso = g.get('gametime', 'TBD')
-        compact_dt = format_mt_kickoff('', raw_iso, local_tz, compact=True) if raw_iso != 'TBD' else 'TBD'
+            row_bg_color = meta['row_odd'] if (tier_row_counter % 2 == 1) else meta['row_even']
+            row_patch = patches.Rectangle((0.0, row_y), 1.0, slot_h, facecolor=row_bg_color, edgecolor='none', zorder=2)
+            ax.add_patch(row_patch)
+            tier_row_counter += 1
 
-        # 1. Match up (Away logo + "AWY @ HME" + Home logo)
-        c0_mid = col_starts[0] + col_widths[0] / 2
-        ax.add_artist(AnnotationBbox(get_team_logo(away_abbr, max_px=42, zoom=0.45), (c0_mid - 0.052, row_mid_y), frameon=False, zorder=4))
-        ax.text(c0_mid, row_mid_y, f"{away_abbr} @ {home_abbr}", ha='center', va='center',
-                fontsize=9.6, fontweight='bold', color='#F8FAFC', zorder=4)
-        ax.add_artist(AnnotationBbox(get_team_logo(home_abbr, max_px=42, zoom=0.45), (c0_mid + 0.052, row_mid_y), frameon=False, zorder=4))
+            next_is_game = (idx + 1 < len(slots)) and (slots[idx + 1][0] == 'game_row')
+            if next_is_game:
+                ax.plot([0.008, 0.992], [row_y, row_y], color='#243047', linewidth=0.8, zorder=3)
 
-        # 2. Date & Time
-        ax.text(col_starts[1] + col_widths[1] / 2, row_mid_y, compact_dt,
-                ha='center', va='center', fontsize=9.0, color='#CBD5E1', zorder=4)
+            away_abbr = g['away_team']['abbr']
+            home_abbr = g['home_team']['abbr']
+            away_nick = get_team_nickname(away_abbr, g['away_team'].get('name'))
+            home_nick = get_team_nickname(home_abbr, g['home_team'].get('name'))
 
-        # 3. Model Blend
-        ax.text(col_starts[2] + col_widths[2] / 2, row_mid_y, f"{blend_pick_pct:.1f}%",
-                ha='center', va='center', fontsize=9.5, fontweight='bold', color='#38BDF8', zorder=4)
+            p = g['prediction']
+            home_prob = float(p.get('model_home_win_prob', 0.5))
+            vegas_home_prob = float(p.get('vegas_home_implied_prob', 0.5))
+            pick_abbr = p.get('pick_abbr', home_abbr if home_prob >= 0.5 else away_abbr)
+            pick_nick = get_team_nickname(pick_abbr, p.get('pick_name'))
 
-        # 4. Vegas
-        ax.text(col_starts[3] + col_widths[3] / 2, row_mid_y, f"{vegas_pick_pct:.1f}%",
-                ha='center', va='center', fontsize=9.3, color='#94A3B8', zorder=4)
+            pick_is_home = (pick_abbr == home_abbr)
+            blend_pick_pct = (home_prob if pick_is_home else (1.0 - home_prob)) * 100.0
+            vegas_pick_pct = (vegas_home_prob if pick_is_home else (1.0 - vegas_home_prob)) * 100.0
 
-        # 5. Winner Pick (highlighted pill)
-        c4_mid = col_starts[4] + col_widths[4] / 2
-        ax.text(
-            c4_mid, row_mid_y, pick_name,
-            ha='center', va='center', fontsize=9.2, fontweight='bold', color='#ECFDF5',
-            bbox=dict(boxstyle='round,pad=0.25', facecolor='#0F2E28', edgecolor='#10B981', linewidth=1.0),
-            zorder=4,
-        )
+            projected_margin = float(p.get('projected_margin', abs(p.get('calibrated_home_margin', 0.0))))
+            home_score = float(p.get('home_projected_score', 0.0))
+            away_score = float(p.get('away_projected_score', 0.0))
+            total_pts = float(p.get('projected_total_points', home_score + away_score))
 
-        # 6. Margin
-        ax.text(col_starts[5] + col_widths[5] / 2, row_mid_y, f"+{projected_margin:.1f}",
-                ha='center', va='center', fontsize=9.5, fontweight='bold', color='#34D399', zorder=4)
+            raw_iso = g.get('gametime', 'TBD')
+            compact_dt = format_mt_kickoff('', raw_iso, local_tz, compact=True) if raw_iso != 'TBD' else 'TBD'
 
-        # 7. Home Score
-        home_color = '#F8FAFC' if home_score >= away_score else '#94A3B8'
-        ax.text(col_starts[6] + col_widths[6] / 2, row_mid_y, f"{home_score:.1f}",
-                ha='center', va='center', fontsize=9.5, fontweight='bold' if home_score >= away_score else 'normal',
-                color=home_color, zorder=4)
+            # 1. Match up
+            c0_left = col_starts[0]
+            c0_w = col_widths[0]
+            ax.add_artist(AnnotationBbox(get_team_logo(away_abbr, max_px=40, zoom=0.45), (c0_left + 0.020, row_mid_y), frameon=False, zorder=4))
+            ax.text(
+                c0_left + c0_w / 2, row_mid_y, f"{away_nick}  @  {home_nick}",
+                ha='center', va='center', fontsize=9.1, fontweight='bold', color='#F8FAFC', zorder=4,
+            )
+            ax.add_artist(AnnotationBbox(get_team_logo(home_abbr, max_px=40, zoom=0.45), (c0_left + c0_w - 0.020, row_mid_y), frameon=False, zorder=4))
 
-        # 8. Away Score
-        away_color = '#F8FAFC' if away_score > home_score else '#94A3B8'
-        ax.text(col_starts[7] + col_widths[7] / 2, row_mid_y, f"{away_score:.1f}",
-                ha='center', va='center', fontsize=9.5, fontweight='bold' if away_score > home_score else 'normal',
-                color=away_color, zorder=4)
+            # 2. Date & Time
+            ax.text(col_starts[1] + col_widths[1] / 2, row_mid_y, compact_dt,
+                    ha='center', va='center', fontsize=9.0, color='#CBD5E1', zorder=4)
 
-        # 9. Total
-        ax.text(col_starts[8] + col_widths[8] / 2, row_mid_y, f"{total_pts:.1f}",
-                ha='center', va='center', fontsize=9.5, fontweight='bold', color='#E2E8F0', zorder=4)
+            # 3. Model Blend
+            ax.text(col_starts[2] + col_widths[2] / 2, row_mid_y, f"{blend_pick_pct:.1f}%",
+                    ha='center', va='center', fontsize=9.4, fontweight='bold', color='#38BDF8', zorder=4)
+
+            # 4. Vegas
+            ax.text(col_starts[3] + col_widths[3] / 2, row_mid_y, f"{vegas_pick_pct:.1f}%",
+                    ha='center', va='center', fontsize=9.2, color='#94A3B8', zorder=4)
+
+            # 5. Winner Pick
+            ax.text(
+                col_starts[4] + col_widths[4] / 2, row_mid_y, pick_nick,
+                ha='center', va='center', fontsize=9.1, fontweight='bold', color='#ECFDF5',
+                bbox=dict(boxstyle='round,pad=0.25', facecolor='#0F2E28', edgecolor='#10B981', linewidth=1.0),
+                zorder=4,
+            )
+
+            # 6. Margin
+            ax.text(col_starts[5] + col_widths[5] / 2, row_mid_y, f"+{projected_margin:.1f}",
+                    ha='center', va='center', fontsize=9.4, fontweight='bold', color='#34D399', zorder=4)
+
+            # 7. Home Score
+            home_color = '#F8FAFC' if home_score >= away_score else '#94A3B8'
+            ax.text(col_starts[6] + col_widths[6] / 2, row_mid_y, f"{home_score:.1f}",
+                    ha='center', va='center', fontsize=9.4, fontweight='bold' if home_score >= away_score else 'normal',
+                    color=home_color, zorder=4)
+
+            # 8. Away Score
+            away_color = '#F8FAFC' if away_score > home_score else '#94A3B8'
+            ax.text(col_starts[7] + col_widths[7] / 2, row_mid_y, f"{away_score:.1f}",
+                    ha='center', va='center', fontsize=9.4, fontweight='bold' if away_score > home_score else 'normal',
+                    color=away_color, zorder=4)
+
+            # 9. Total
+            ax.text(col_starts[8] + col_widths[8] / 2, row_mid_y, f"{total_pts:.1f}",
+                    ha='center', va='center', fontsize=9.4, fontweight='bold', color='#E2E8F0', zorder=4)
 
     plt.savefig(output_path, dpi=220, facecolor='#0B0F19')
     plt.close(fig)
+
+
+def format_odds_label(odds_val, has_live_odds: bool):
+    """Returns formatted American odds only when real sportsbook pricing exists (never fake -110)."""
+    if odds_val is None or not has_live_odds:
+        return None
+    return f"{int(odds_val):+d}"
 
 
 def draw_market_cell(ax, x, y, w, h, main_text, odds_text, is_pick=False, edge_tag=None):
@@ -285,7 +382,7 @@ def draw_market_cell(ax, x, y, w, h, main_text, odds_text, is_pick=False, edge_t
     ax.text(
         x + w / 2, main_y, main_text,
         ha='center', va='center',
-        fontsize=11.2, fontweight='bold', color=main_color,
+        fontsize=11.6, fontweight='bold', color=main_color,
         transform=ax.transAxes, zorder=3,
     )
 
@@ -302,7 +399,7 @@ def draw_market_cell(ax, x, y, w, h, main_text, odds_text, is_pick=False, edge_t
         ax.text(
             x + w - 0.012, y + h - 0.014, edge_tag,
             ha='right', va='top',
-            fontsize=6.6, fontweight='bold', color='#052E16',
+            fontsize=6.8, fontweight='bold', color='#052E16',
             bbox=dict(boxstyle='round,pad=0.16', facecolor='#34D399', edgecolor='none'),
             transform=ax.transAxes, zorder=4,
         )
@@ -345,13 +442,14 @@ def draw_custom_matchup_card(ax, game_obj: dict, kickoff_label: str):
 
     tier = p.get('confidence_tier', 'Low')
     tier_palette = {
-        'High': ('#0C4A6E', '#38BDF8'),
-        'Moderate': ('#451A03', '#FBBF24'),
-        'Low': ('#1E293B', '#94A3B8'),
+        'High': ('#331D08', '#FBBF24'),
+        'Moderate': ('#261844', '#C084FC'),
+        'Low': ('#0A2E46', '#38BDF8'),
     }
     t_bg, t_fg = tier_palette.get(tier, ('#1E293B', '#94A3B8'))
+    tier_text = 'MEDIUM' if tier.lower() in ('moderate', 'medium') else tier.upper()
     ax.text(
-        0.955, 0.925, f"● {tier.upper()} CONFIDENCE",
+        0.955, 0.925, f"● {tier_text} CONFIDENCE",
         ha='right', va='center', fontsize=7.6, fontweight='bold', color=t_fg,
         bbox=dict(boxstyle='round,pad=0.25', facecolor=t_bg, edgecolor='none'),
         transform=ax.transAxes, zorder=3,
@@ -400,82 +498,69 @@ def draw_custom_matchup_card(ax, game_obj: dict, kickoff_label: str):
     ax.text(bar_x + bar_w, bar_y + 0.040, f"{home_prob*100:.1f}% {home_abbr}", ha='right', va='center',
             fontsize=7.6, fontweight='bold', color='#94A3B8', transform=ax.transAxes, zorder=3)
 
-    # --- MARKET MATRIX HEADERS ---
-    col_x = [0.125, 0.405, 0.685]
-    col_w = 0.270
-    for cx, title in zip(col_x, ['SPREAD', 'TOTAL', 'MONEYLINE']):
+    # --- 2-COLUMN MARKET MATRIX HEADERS (SPREAD & TOTAL ONLY) ---
+    col_x = [0.130, 0.550]
+    col_w = 0.405
+    for cx, title in zip(col_x, ['SPREAD', 'TOTAL']):
         ax.text(cx + col_w / 2, 0.525, title, ha='center', va='center',
-                fontsize=8.2, fontweight='bold', color='#64748B', transform=ax.transAxes, zorder=3)
+                fontsize=8.4, fontweight='bold', color='#64748B', transform=ax.transAxes, zorder=3)
 
-    ax.add_artist(AnnotationBbox(get_team_logo(away_abbr, max_px=56), (0.075, 0.39), frameon=False, xycoords='axes fraction', zorder=4))
-    ax.add_artist(AnnotationBbox(get_team_logo(home_abbr, max_px=56), (0.075, 0.165), frameon=False, xycoords='axes fraction', zorder=4))
+    ax.add_artist(AnnotationBbox(get_team_logo(away_abbr, max_px=56), (0.078, 0.39), frameon=False, xycoords='axes fraction', zorder=4))
+    ax.add_artist(AnnotationBbox(get_team_logo(home_abbr, max_px=56), (0.078, 0.165), frameon=False, xycoords='axes fraction', zorder=4))
 
     row_h = 0.185
     away_y, home_y = 0.298, 0.072
 
+    has_live_odds = bool(mkt.get('odds_fetched_at'))
     away_spread = mkt.get('away_spread')
     home_spread = mkt.get('home_spread')
-    away_sp_odds = mkt.get('away_spread_odds', -110)
-    home_sp_odds = mkt.get('home_spread_odds', -110)
+    away_sp_odds = format_odds_label(mkt.get('away_spread_odds'), has_live_odds)
+    home_sp_odds = format_odds_label(mkt.get('home_spread_odds'), has_live_odds)
 
     total_line = mkt.get('total_line')
-    over_odds = mkt.get('over_odds', -110)
-    under_odds = mkt.get('under_odds', -110)
-
-    away_ml = mkt.get('away_ml', game_obj['away_team'].get('moneyline', -110))
-    home_ml = mkt.get('home_ml', game_obj['home_team'].get('moneyline', -110))
+    over_odds = format_odds_label(mkt.get('over_odds'), has_live_odds)
+    under_odds = format_odds_label(mkt.get('under_odds'), has_live_odds)
 
     ats_edge = p.get('ats_edge')
     tot_edge = p.get('total_edge')
     sp_tag = f"+{abs(ats_edge):.1f}" if ats_edge is not None else None
     tot_tag = f"+{abs(tot_edge):.1f}" if tot_edge is not None else None
 
+    # 1. Spread Cells
     draw_market_cell(
         ax, col_x[0], away_y, col_w, row_h,
         f"{away_spread:+.1f}" if away_spread is not None else "N/A",
-        f"{int(away_sp_odds):+d}" if away_spread is not None else None,
+        away_sp_odds if away_spread is not None else None,
         is_pick=(p.get('spread_pick_side') == 'away'),
         edge_tag=sp_tag,
     )
     draw_market_cell(
         ax, col_x[0], home_y, col_w, row_h,
         f"{home_spread:+.1f}" if home_spread is not None else "N/A",
-        f"{int(home_sp_odds):+d}" if home_spread is not None else None,
+        home_sp_odds if home_spread is not None else None,
         is_pick=(p.get('spread_pick_side') == 'home'),
         edge_tag=sp_tag,
     )
 
+    # 2. Total Cells
     draw_market_cell(
         ax, col_x[1], away_y, col_w, row_h,
         f"O {total_line:.1f}" if total_line is not None else "N/A",
-        f"{int(over_odds):+d}" if total_line is not None else None,
+        over_odds if total_line is not None else None,
         is_pick=(p.get('total_pick_side') == 'over'),
         edge_tag=tot_tag,
     )
     draw_market_cell(
         ax, col_x[1], home_y, col_w, row_h,
         f"U {total_line:.1f}" if total_line is not None else "N/A",
-        f"{int(under_odds):+d}" if total_line is not None else None,
+        under_odds if total_line is not None else None,
         is_pick=(p.get('total_pick_side') == 'under'),
         edge_tag=tot_tag,
     )
 
-    draw_market_cell(
-        ax, col_x[2], away_y, col_w, row_h,
-        f"{int(away_ml):+d}", None,
-        is_pick=(p.get('ml_pick_side') == 'away'),
-        edge_tag="PICK",
-    )
-    draw_market_cell(
-        ax, col_x[2], home_y, col_w, row_h,
-        f"{int(home_ml):+d}", None,
-        is_pick=(p.get('ml_pick_side') == 'home'),
-        edge_tag="PICK",
-    )
-
 
 def render_detailed_cards(all_games: list, week_num: int, scale_factor: float, output_path: str):
-    """Renders the detailed 2-column matchup card board PNG."""
+    """Renders the detailed 2-column matchup card board PNG (Spread & Total only)."""
     num_games = len(all_games)
     ncols = 2
     nrows = math.ceil(num_games / ncols)
